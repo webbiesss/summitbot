@@ -61,14 +61,14 @@ module.exports = {
 
         const climber = interaction.options.getUser('climber');
         const amount = interaction.options.getInteger('amount');
-        const initial = db[climber.id].summits;
-
+    
         const dbPath = path.join(__dirname, '..', 'data', 'climbers.json');
         let db = JSON.parse(fs.readFileSync(dbPath));
 
         if (!db[climber.id]) {
             db[climber.id] = { summits: 0 };
         }
+        const initialTotal = db[climber.id].summits;
 
         db[climber.id].summits += amount;
         const total = db[climber.id].summits;
@@ -94,8 +94,7 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
             .setDescription(
-                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
-                `**${initial} 🏔️ ➜ ${total} 🏔️**`
+                `Updated ${climber} summit stamps by **${amount}**.\n\n**${initialTotal} 🏔️ ➜ ${total} 🏔️**`
             )
             .setColor(0x00AEFF)
             .setFooter({
