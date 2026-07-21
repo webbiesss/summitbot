@@ -61,6 +61,7 @@ module.exports = {
 
         const climber = interaction.options.getUser('climber');
         const amount = interaction.options.getInteger('amount');
+        const initial = db[climber.id].summits;
 
         const dbPath = path.join(__dirname, '..', 'data', 'climbers.json');
         let db = JSON.parse(fs.readFileSync(dbPath));
@@ -92,7 +93,10 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
-            .setDescription(`Updated ${climber} summit stamps by **${amount}**.`)
+            .setDescription(
+                `Updated ${climber} summit stamps by **${amount}**.` +
+                `**${initial} 🏔️ ➜ ${total} 🏔️**`
+            )
             .setColor(0x00AEFF)
             .setFooter({
                 text: `Logged by ${interaction.user.username} • ${new Date().toISOString()}`
