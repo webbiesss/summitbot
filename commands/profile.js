@@ -19,13 +19,13 @@ module.exports = {
 
         const summits = db[climber.id]?.summits || 0;
 
-        let levelText = '';
-        if (summits >= 100) levelText = 'Talented Climber';
-        else if (summits >= 50) levelText = 'Expert Climber';
-        else if (summits >= 20) levelText = 'Experienced Climber';
-        else if (summits >= 10) levelText = 'Novice Climber';
-        else if (summits >= 5) levelText = 'Beginner Climber';
-        else levelText = 'Unranked';
+        let levelText = 'Work In Progress';
+        //if (summits >= 100) levelText = 'Talented Climber';
+       // else if (summits >= 50) levelText = 'Expert Climber';
+       // else if (summits >= 20) levelText = 'Experienced Climber';
+       // else if (summits >= 10) levelText = 'Novice Climber';
+        //else if (summits >= 5) levelText = 'Beginner Climber';
+       // else levelText = 'Unranked';
 
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions — User Profile')

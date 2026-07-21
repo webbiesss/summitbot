@@ -20,7 +20,7 @@ module.exports = {
         // ==========================================
         // REQUIRED ROLE FOR /STAMPUPDATE
         // ==========================================
-        const requiredRoleId = '1528823041507856404';
+        const requiredRoleId = '827956659988856852';
 
         // Get the member who ran the command
         const commandUser = interaction.member;
@@ -75,20 +75,20 @@ module.exports = {
         fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
 
         const thresholds = [
-            { amount: 5, role: '1528831587117043793' },  // beginner
-            { amount: 10, role: '1528831779690250381' }, // novice
-            { amount: 20, role: '1528831838309580810' }, // experienced
-            { amount: 50, role: '1528831960363831356' }, // expert
-            { amount: 100, role: '1528832027086950550' } // talented
+            { amount: 5, role: '827956665424281690' },  // beginner
+            { amount: 10, role: '827956664878891018' }, // novice
+            { amount: 20, role: '827956663902273548' }, // experienced
+            { amount: 50, role: '827956663902273548' }, // expert
+            { amount: 100, role: '827956662748315660' } // talented
         ];
 
         const member = await interaction.guild.members.fetch(climber.id);
 
-        for (const t of thresholds) {
-            if (total >= t.amount) {
-                await member.roles.add(t.role).catch(() => {});
-            }
-        }
+        //for (const t of thresholds) {
+        //    if (total >= t.amount) {
+        //        await member.roles.add(t.role).catch(() => {});
+        //    }
+        // }
 
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
