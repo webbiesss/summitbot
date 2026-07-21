@@ -94,7 +94,7 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
             .setDescription(
-                `Updated ${climber} summit stamps by **${amount}**.` +
+                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
                 `**${initial} 🏔️ ➜ ${total} 🏔️**`
             )
             .setColor(0x00AEFF)
