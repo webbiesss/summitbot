@@ -113,7 +113,7 @@ module.exports = {
                 {
                     name: 'Level Progress',
                     value: summits >= eliteclimber
-                        ? `🏆 Maximum level reached!\n**${progressBar}**`
+                        ? `🏆 Maximum level reached!`
                         : `**${progressPercentage}%** toward **${nextLevelText}**\n**${progressBar}**\n\nYou need **${stampsNeeded}** more summit stamp${stampsNeeded === 1 ? '' : 's'} to reach **${nextLevelText}**.`,
                     inline: false
                 }
