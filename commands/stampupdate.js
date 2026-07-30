@@ -20,17 +20,16 @@ module.exports = {
         // ==========================================
         // REQUIRED ROLE FOR /STAMPUPDATE
         // ==========================================
+
         const requiredRoleId = '827956659317899264';
 
-        // Get the member who ran the command
         const commandUser = interaction.member;
 
-        // Get the required role
         const requiredRole = interaction.guild.roles.cache.get(requiredRoleId);
 
-        // If the role ID is invalid, log an error
         if (!requiredRole) {
             console.error('The required role for /stampupdate could not be found.');
+
             return interaction.reply({
                 content: 'There is a configuration error with this command.',
                 ephemeral: true
@@ -42,7 +41,6 @@ module.exports = {
             role => role.position >= requiredRole.position
         );
 
-        // If they don't have permission, send an ephemeral embed
         if (!hasPermission) {
             const permissionEmbed = new EmbedBuilder()
                 .setTitle('World Expeditions')
@@ -55,52 +53,218 @@ module.exports = {
             });
         }
 
+
         // ==========================================
-        // STAMPUPDATE COMMAND
+        // GET CLIMBER AND AMOUNT
         // ==========================================
 
         const climber = interaction.options.getUser('climber');
         const amount = interaction.options.getInteger('amount');
-    
+
+
+        // ==========================================
+        // DATABASE
+        // ==========================================
+
         const dbPath = path.join(__dirname, '..', 'data', 'climbers.json');
+
         let db = JSON.parse(fs.readFileSync(dbPath));
 
         if (!db[climber.id]) {
             db[climber.id] = { summits: 0 };
         }
+
         const initialTotal = db[climber.id].summits;
 
+        // Add summit stamps
         db[climber.id].summits += amount;
+
         const total = db[climber.id].summits;
 
-        fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+        // Save database
+        fs.writeFileSync(
+            dbPath,
+            JSON.stringify(db, null, 2)
+        );
 
-        const thresholds = [
-            { amount: 5, role: '827956665424281690' },  // beginner
-            { amount: 10, role: '827956664878891018' }, // novice
-            { amount: 20, role: '827956663902273548' }, // experienced
-            { amount: 50, role: '827956663902273548' }, // expert
-            { amount: 100, role: '827956662748315660' } // talented
-        ];
+
+        // ==========================================
+        // LEVEL REQUIREMENTS
+        // ==========================================
+
+        let improvingclimber = 2;
+        let intermediateclimber = 5;
+        let experiencedclimber = 9;
+        let advancedclimber = 14;
+        let eliteclimber = 20;
+
+
+        // ==========================================
+        // CLIMBER ROLES
+        // ==========================================
+
+        const roles = {
+            climber: 'ROLE_ID_FOR_CLIMBER',
+
+            improving: '827956665424281690',
+
+            intermediate: '827956664878891018',
+
+            experienced: '827956663902273548',
+
+            advanced: '827956663721001010',
+
+            elite: '827956662748315660'
+        };
+
+
+        // ==========================================
+        // DETERMINE OLD LEVEL
+        // ==========================================
+
+        function getLevel(summits) {
+
+            if (summits >= eliteclimber) {
+                return {
+                    name: 'Elite Climber',
+                    roleId: roles.elite
+                };
+            }
+
+            if (summits >= advancedclimber) {
+                return {
+                    name: 'Advanced Climber',
+                    roleId: roles.advanced
+                };
+            }
+
+            if (summits >= experiencedclimber) {
+                return {
+                    name: 'Experienced Climber',
+                    roleId: roles.experienced
+                };
+            }
+
+            if (summits >= intermediateclimber) {
+                return {
+                    name: 'Intermediate Climber',
+                    roleId: roles.intermediate
+                };
+            }
+
+            if (summits >= improvingclimber) {
+                return {
+                    name: 'Improving Climber',
+                    roleId: roles.improving
+                };
+            }
+
+            return {
+                name: 'Climber',
+                roleId: roles.climber
+            };
+        }
+
+
+        const oldLevel = getLevel(initialTotal);
+        const newLevel = getLevel(total);
+
+
+        // ==========================================
+        // DETECT LEVEL UP
+        // ==========================================
+
+        const leveledUp =
+            oldLevel.name !== newLevel.name;
+
+
+        // ==========================================
+        // GET DISCORD MEMBER
+        // ==========================================
 
         const member = await interaction.guild.members.fetch(climber.id);
 
-        //for (const t of thresholds) {
-        //    if (total >= t.amount) {
-        //        await member.roles.add(t.role).catch(() => {});
-        //    }
-        // }
+
+        // ==========================================
+        // REMOVE ALL CLIMBER LEVEL ROLES
+        // ==========================================
+
+        const allClimberRoles = [
+            roles.climber,
+            roles.improving,
+            roles.intermediate,
+            roles.experienced,
+            roles.advanced,
+            roles.elite
+        ];
+
+        for (const roleId of allClimberRoles) {
+
+            if (member.roles.cache.has(roleId)) {
+
+                await member.roles.remove(roleId)
+                    .catch(error => {
+                        console.error(
+                            `Could not remove role ${roleId}:`,
+                            error
+                        );
+                    });
+
+            }
+        }
+
+
+        // ==========================================
+        // GIVE ONLY HIGHEST QUALIFYING ROLE
+        // ==========================================
+
+        await member.roles.add(newLevel.roleId)
+            .catch(error => {
+                console.error(
+                    `Could not add role ${newLevel.roleId}:`,
+                    error
+                );
+            });
+
+
+        // ==========================================
+        // CREATE RESPONSE
+        // ==========================================
+
+        let description;
+
+        if (leveledUp) {
+
+            description =
+                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
+                `**${initialTotal} ➜ ${total} 🏔️**\n\n` +
+                `🎉 **LEVEL UP!**\n${climber} has leveled up\n` +
+                `**${oldLevel.name}** ➜ **${newLevel.name}**`;
+
+        } else {
+
+            description =
+                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
+                `**${initialTotal} ➜ ${total} 🏔️**\n\n` +
+                `Current Level: **${newLevel.name}**`;
+
+        }
+
+
+        // ==========================================
+        // SEND EMBED
+        // ==========================================
 
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
-            .setDescription(
-                `Updated ${climber} summit stamps by **${amount}**.\n\n**${initialTotal} ➜ ${total} 🏔️**`
-            )
+            .setDescription(description)
             .setColor(0x00AEFF)
             .setFooter({
                 text: `Logged by ${interaction.user.username} • ${new Date().toISOString()}`
             });
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({
+            embeds: [embed]
+        });
     }
 };

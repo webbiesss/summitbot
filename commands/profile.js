@@ -19,25 +19,102 @@ module.exports = {
 
         const summits = db[climber.id]?.summits || 0;
 
-        let levelText = 'Work In Progress';
-        //if (summits >= 100) levelText = 'Talented Climber';
-       // else if (summits >= 50) levelText = 'Expert Climber';
-       // else if (summits >= 20) levelText = 'Experienced Climber';
-       // else if (summits >= 10) levelText = 'Novice Climber';
-        //else if (summits >= 5) levelText = 'Beginner Climber';
-       // else levelText = 'Unranked';
+         // Determine current level and next level
+            // Level requirements
+        let improvingclimber = 2;
+        let intermediateclimber = 5;
+        let experiencedclimber = 9;
+        let advancedclimber = 14;
+        let eliteclimber = 20;
+
+        // Determine current level and next level
+        let levelText;
+        let currentLevelRequirement;
+        let nextLevelRequirement;
+        let nextLevelText;
+
+        if (summits >= eliteclimber) {
+            levelText = 'Elite Climber';
+            currentLevelRequirement = eliteclimber;
+            nextLevelRequirement = eliteclimber;
+            nextLevelText = 'Maximum Level reached';
+        } else if (summits >= advancedclimber) {
+            levelText = 'Advanced Climber';
+            currentLevelRequirement = advancedclimber;
+            nextLevelRequirement = eliteclimber;
+            nextLevelText = 'Elite Climber';
+        } else if (summits >= experiencedclimber) {
+            levelText = 'Experienced Climber';
+            currentLevelRequirement = experiencedclimber;
+            nextLevelRequirement = advancedclimber;
+            nextLevelText = 'Advanced Climber';
+        } else if (summits >= intermediateclimber) {
+            levelText = 'Intermediate Climber';
+            currentLevelRequirement = intermediateclimber;
+            nextLevelRequirement = experiencedclimber;
+            nextLevelText = 'Experienced Climber';
+        } else if (summits >= improvingclimber) {
+            levelText = 'Improving Climber';
+            currentLevelRequirement = improvingclimber;
+            nextLevelRequirement = intermediateclimber;
+            nextLevelText = 'Intermediate Climber';
+        } else {
+            levelText = 'Climber';
+            currentLevelRequirement = 0;
+            nextLevelRequirement = improvingclimber;
+            nextLevelText = 'Improving Climber';
+        }
+
+        // Calculate progression
+        let progressBar;
+        let progressPercentage;
+        let stampsNeeded;
+
+        if (summits >= 20) {
+            progressBar = '██████████';
+            progressPercentage = 100;
+            stampsNeeded = 0;
+        } else {
+            const progressRange = nextLevelRequirement - currentLevelRequirement;
+            const progressAmount = summits - currentLevelRequirement;
+
+            progressPercentage = Math.floor(
+                (progressAmount / progressRange) * 100
+            );
+
+            const filledBlocks = Math.floor(progressPercentage / 10);
+            const emptyBlocks = 10 - filledBlocks;
+
+            progressBar =
+                '█'.repeat(filledBlocks) +
+                '░'.repeat(emptyBlocks);
+
+            stampsNeeded = nextLevelRequirement - summits;
+        }
 
         const embed = new EmbedBuilder()
             .setTitle('World Expeditions — User Profile')
             .addFields(
                 {
+                    name: 'Climber',
+                    value: `${climber}`,
+                    inline: false
+                },
+                {
                     name: 'Summit Stamps',
-                    value: `You currently have **${summits}** summit stamps ${climber}`,
+                    value: `You currently have **${summits}** summit stamps`,
                     inline: false
                 },
                 {
                     name: 'Level',
                     value: levelText,
+                    inline: false
+                },
+                {
+                    name: 'Level Progress',
+                    value: summits >= 100
+                        ? `🏆 Maximum level reached!\n**${progressBar}**`
+                        : `**${progressPercentage}%** toward **${nextLevelText}**\n**${progressBar}**\n\nYou need **${stampsNeeded}** more summit stamp${stampsNeeded === 1 ? '' : 's'} to reach **${nextLevelText}**.`,
                     inline: false
                 }
             )
