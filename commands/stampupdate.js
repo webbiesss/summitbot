@@ -21,7 +21,7 @@ module.exports = {
         // REQUIRED ROLE FOR /STAMPUPDATE
         // ==========================================
 
-        const requiredRoleId = '827956659317899264';
+        const requiredRoleId = '827956660638318592';
 
         const commandUser = interaction.member;
 
