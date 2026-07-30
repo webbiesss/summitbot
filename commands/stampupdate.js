@@ -104,7 +104,7 @@ module.exports = {
         // ==========================================
 
         const roles = {
-            climber: 'ROLE_ID_FOR_CLIMBER',
+            climber: '827956665989988402',
 
             improving: '827956665424281690',
 
