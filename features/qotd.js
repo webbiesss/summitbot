@@ -24,7 +24,7 @@ const qotdConfigPath = path.join(
 // How often the bot checks if it is time
 // to post a QOTD
 // 30 seconds = 30,000 milliseconds
-const CHECK_INTERVAL = 1800000;
+const CHECK_INTERVAL = 30000;
 
 // ================================
 // Helper Functions
