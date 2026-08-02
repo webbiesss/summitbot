@@ -35,6 +35,9 @@ module.exports = {
         // Check User Permissions
         // ================================
 
+        const member = interaction.member;
+        const requiredRole = interaction.guild.roles.cache.get(REQUIRED_ROLE_ID);
+
        // Check if the required role exists
         if (!requiredRole) {
             console.error(
