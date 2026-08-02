@@ -17,7 +17,7 @@ const qotdPath = path.join(
 const qotdConfigPath = path.join(
     __dirname,
     '..',
-    'config',
+    'data',
     'qotdconfig.json'
 );
 

@@ -35,26 +35,53 @@ module.exports = {
         // Check User Permissions
         // ================================
 
-        const member = interaction.member;
-        const requiredRole = interaction.guild.roles.cache.get(REQUIRED_ROLE_ID);
+        const member =
+            interaction.member;
 
-       // Check if the required role exists
-        if (!requiredRole) {
+        const requiredRole =
+            interaction.guild.roles.cache.get(
+                REQUIRED_ROLE_ID
+            );
+
+        // ================================
+        // Check if Required Role Exists
+        // ================================
+
+        if (
+            !requiredRole
+        ) {
+
             console.error(
                 `QOTD required role with ID ${REQUIRED_ROLE_ID} was not found.`
             );
 
             return interaction.reply({
-                content: 'There was an error checking your permissions.',
-              
+
+                content:
+                    'There was an error checking your permissions.',
+
+                ephemeral:
+                    true
             });
         }
 
-        // Check if the user has the required role or higher
-        if (member.roles.highest.position < requiredRole.position) {
+        // ================================
+        // Check if User Has Required Role
+        // or Higher
+        // ================================
+
+        if (
+            member.roles.highest.position <
+            requiredRole.position
+        ) {
+
             return interaction.reply({
-                content: 'World Expeditions\nYou do not have permission to run that command.',
-                ephemeral: true
+
+                content:
+                    'World Expeditions\nYou do not have permission to run that command.',
+
+                ephemeral:
+                    true
             });
         }
 
@@ -62,23 +89,48 @@ module.exports = {
         // Force QOTD
         // ================================
 
-        const result =
-            await forcePostQotd(
-                interaction.client
+        let result;
+
+        try {
+
+            result =
+                await forcePostQotd(
+                    interaction.client
+                );
+
+        } catch (error) {
+
+            console.error(
+                'Error while forcing QOTD:',
+                error
             );
 
+            return interaction.reply({
+
+                content:
+                    '❌ There was an error while trying to post the QOTD.',
+
+                ephemeral:
+                    true
+            });
+        }
+
         // ================================
-        // Handle Error
+        // Handle QOTD Error
         // ================================
 
         if (
+            !result ||
             !result.success
         ) {
 
             return interaction.reply({
 
                 content:
-                    `❌ ${result.message}`,
+                    `❌ ${
+                        result?.message ||
+                        'The QOTD could not be posted.'
+                    }`,
 
                 ephemeral:
                     true
@@ -88,11 +140,6 @@ module.exports = {
         // ================================
         // Success Message
         // ================================
-
-        const timestamp =
-            Math.floor(
-                Date.now() / 1000
-            );
 
         const embed =
             new EmbedBuilder()
