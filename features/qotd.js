@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ================================
-// Configuration
+// Configuration File Locations
 // ================================
 
 // Location of QOTD data
@@ -13,21 +13,24 @@ const qotdPath = path.join(
     'qotd.json'
 );
 
-// Timezone used for QOTD scheduling
-const QOTD_TIMEZONE = 'America/Vancouver';
+// Location of QOTD configuration
+const qotdConfigPath = path.join(
+    __dirname,
+    '..',
+    'config',
+    'qotdconfig.json'
+);
 
 // How often the bot checks if it is time
 // to post a QOTD
 // 30 seconds = 30,000 milliseconds
-const CHECK_INTERVAL = 30 * 1000;
-
-// Channel where users submit QOTD answers
-const ANSWER_CHANNEL_ID = '1533265327868346618';
+const CHECK_INTERVAL = 1800000;
 
 // ================================
 // Helper Functions
 // ================================
 
+// Load QOTD data
 function loadQotdData() {
 
     try {
@@ -59,6 +62,49 @@ function loadQotdData() {
     }
 }
 
+// ================================
+// Load QOTD Configuration
+// ================================
+
+function loadQotdConfig() {
+
+    try {
+
+        if (
+            !fs.existsSync(
+                qotdConfigPath
+            )
+        ) {
+
+            console.error(
+                'QOTD configuration file could not be found.'
+            );
+
+            return null;
+        }
+
+        return JSON.parse(
+            fs.readFileSync(
+                qotdConfigPath,
+                'utf8'
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            'Error loading QOTD configuration:',
+            error
+        );
+
+        return null;
+    }
+}
+
+// ================================
+// Save QOTD Data
+// ================================
+
 function saveQotdData(qotdData) {
 
     try {
@@ -86,44 +132,92 @@ function saveQotdData(qotdData) {
 }
 
 // ================================
-// Get Current Time in Vancouver
+// Get Current Time in Configured Timezone
 // ================================
 
-function getVancouverTime() {
+function getConfiguredTime(
+    timezone
+) {
 
-    const now = new Date();
+    const now =
+        new Date();
 
-    const formatter = new Intl.DateTimeFormat(
-        'en-CA',
-        {
-            timeZone: QOTD_TIMEZONE,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        }
-    );
+    const formatter =
+        new Intl.DateTimeFormat(
+            'en-CA',
+            {
+                timeZone:
+                    timezone,
 
-    const parts = formatter.formatToParts(now);
+                year:
+                    'numeric',
+
+                month:
+                    '2-digit',
+
+                day:
+                    '2-digit',
+
+                hour:
+                    '2-digit',
+
+                minute:
+                    '2-digit',
+
+                hour12:
+                    false
+            }
+        );
+
+    const parts =
+        formatter.formatToParts(
+            now
+        );
 
     const time = {};
 
-    for (const part of parts) {
+    for (
+        const part
+        of parts
+    ) {
 
-        if (part.type !== 'literal') {
+        if (
+            part.type !== 'literal'
+        ) {
 
-            time[part.type] = part.value;
+            time[
+                part.type
+            ] =
+                part.value;
         }
     }
 
     return {
-        year: Number(time.year),
-        month: Number(time.month),
-        day: Number(time.day),
-        hour: Number(time.hour),
-        minute: Number(time.minute)
+
+        year:
+            Number(
+                time.year
+            ),
+
+        month:
+            Number(
+                time.month
+            ),
+
+        day:
+            Number(
+                time.day
+            ),
+
+        hour:
+            Number(
+                time.hour
+            ),
+
+        minute:
+            Number(
+                time.minute
+            )
     };
 }
 
@@ -131,22 +225,33 @@ function getVancouverTime() {
 // Check if QOTD Should Be Posted
 // ================================
 
-function isTimeForQotd(qotdData) {
+function isTimeForQotd(
+    qotdData,
+    qotdConfig
+) {
 
-    const vancouverTime =
-        getVancouverTime();
+    const currentTime =
+        getConfiguredTime(
+            qotdConfig.timezone
+        );
 
     const currentHour =
-        vancouverTime.hour;
+        currentTime.hour;
 
     const currentMinute =
-        vancouverTime.minute;
+        currentTime.minute;
 
-    // Check if the current Vancouver time
-    // matches the configured QOTD time
+    // Check if the current time matches
+    // the configured QOTD time
     return (
-        currentHour === qotdData.postHour &&
-        currentMinute === qotdData.postMinute
+
+        currentHour ===
+            qotdConfig.postHour
+
+        &&
+
+        currentMinute ===
+            qotdConfig.postMinute
     );
 }
 
@@ -154,9 +259,14 @@ function isTimeForQotd(qotdData) {
 // Prevent Multiple Posts
 // ================================
 
-function wasPostedToday(qotdData) {
+function wasPostedToday(
+    qotdData,
+    qotdConfig
+) {
 
-    if (!qotdData.lastPostedAt) {
+    if (
+        !qotdData.lastPostedAt
+    ) {
 
         return false;
     }
@@ -170,10 +280,17 @@ function wasPostedToday(qotdData) {
         new Intl.DateTimeFormat(
             'en-CA',
             {
-                timeZone: QOTD_TIMEZONE,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
+                timeZone:
+                    qotdConfig.timezone,
+
+                year:
+                    'numeric',
+
+                month:
+                    '2-digit',
+
+                day:
+                    '2-digit'
             }
         );
 
@@ -181,10 +298,17 @@ function wasPostedToday(qotdData) {
         new Intl.DateTimeFormat(
             'en-CA',
             {
-                timeZone: QOTD_TIMEZONE,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
+                timeZone:
+                    qotdConfig.timezone,
+
+                year:
+                    'numeric',
+
+                month:
+                    '2-digit',
+
+                day:
+                    '2-digit'
             }
         );
 
@@ -199,7 +323,8 @@ function wasPostedToday(qotdData) {
         );
 
     return (
-        lastPostedDate === currentDate
+        lastPostedDate ===
+        currentDate
     );
 }
 
@@ -207,12 +332,80 @@ function wasPostedToday(qotdData) {
 // Post QOTD
 // ================================
 
-async function postQotd(client) {
+async function postQotd(
+    client
+) {
+
+    // ================================
+    // Load QOTD Data
+    // ================================
 
     const qotdData =
         loadQotdData();
 
-    if (!qotdData) {
+    if (
+        !qotdData
+    ) {
+
+        return;
+    }
+
+    // ================================
+    // Load QOTD Configuration
+    // ================================
+
+    const qotdConfig =
+        loadQotdConfig();
+
+    if (
+        !qotdConfig
+    ) {
+
+        return;
+    }
+
+    // ================================
+    // Check Required Configuration
+    // ================================
+
+    if (
+        !qotdConfig.channelId
+    ) {
+
+        console.error(
+            'QOTD channel ID has not been configured.'
+        );
+
+        return;
+    }
+
+    if (
+        !qotdConfig.roleId
+    ) {
+
+        console.warn(
+            'QOTD role ID has not been configured. No role will be pinged.'
+        );
+    }
+
+    if (
+        !qotdConfig.answerChannelId
+    ) {
+
+        console.error(
+            'QOTD answer channel ID has not been configured.'
+        );
+
+        return;
+    }
+
+    if (
+        !qotdConfig.timezone
+    ) {
+
+        console.error(
+            'QOTD timezone has not been configured.'
+        );
 
         return;
     }
@@ -229,26 +422,14 @@ async function postQotd(client) {
     }
 
     // ================================
-    // Check QOTD Channel
-    // ================================
-
-    if (
-        !qotdData.channelId
-    ) {
-
-        console.log(
-            'QOTD channel has not been configured yet.'
-        );
-
-        return;
-    }
-
-    // ================================
     // Check if Already Posted Today
     // ================================
 
     if (
-        wasPostedToday(qotdData)
+        wasPostedToday(
+            qotdData,
+            qotdConfig
+        )
     ) {
 
         return;
@@ -259,7 +440,10 @@ async function postQotd(client) {
     // ================================
 
     if (
-        !isTimeForQotd(qotdData)
+        !isTimeForQotd(
+            qotdData,
+            qotdConfig
+        )
     ) {
 
         return;
@@ -272,7 +456,7 @@ async function postQotd(client) {
     const channel =
         await client.channels
             .fetch(
-                qotdData.channelId
+                qotdConfig.channelId
             )
             .catch(
                 error => {
@@ -286,7 +470,9 @@ async function postQotd(client) {
                 }
             );
 
-    if (!channel) {
+    if (
+        !channel
+    ) {
 
         return;
     }
@@ -296,6 +482,7 @@ async function postQotd(client) {
     // ================================
 
     let question;
+
     let qotdType;
 
     // ================================
@@ -304,15 +491,23 @@ async function postQotd(client) {
     // ================================
 
     if (
+
         Array.isArray(
             qotdData.queuedQuestions
-        ) &&
-        qotdData.queuedQuestions.length > 0
+        )
+
+        &&
+
+        qotdData.queuedQuestions.length >
+            0
     ) {
 
-        // Get the first question in the queue
+        // Get the first question
+        // in the queue
         const queuedQotd =
-            qotdData.queuedQuestions[0];
+            qotdData.queuedQuestions[
+                0
+            ];
 
         question =
             queuedQotd.question;
@@ -320,8 +515,8 @@ async function postQotd(client) {
         qotdType =
             'Queued QOTD';
 
-        // Remove the question from
-        // the queue
+        // Remove the question
+        // from the queue
         qotdData.queuedQuestions.shift();
 
         console.log(
@@ -337,12 +532,18 @@ async function postQotd(client) {
 
     else {
 
-        // Make sure automatic questions exist
+        // Make sure automatic
+        // questions exist
         if (
+
             !Array.isArray(
                 qotdData.questions
-            ) ||
-            qotdData.questions.length === 0
+            )
+
+            ||
+
+            qotdData.questions.length ===
+                0
         ) {
 
             console.error(
@@ -355,10 +556,18 @@ async function postQotd(client) {
         // Make sure currentQuestionIndex
         // is valid
         if (
+
             !Number.isInteger(
                 qotdData.currentQuestionIndex
-            ) ||
-            qotdData.currentQuestionIndex < 0 ||
+            )
+
+            ||
+
+            qotdData.currentQuestionIndex <
+                0
+
+            ||
+
             qotdData.currentQuestionIndex >=
                 qotdData.questions.length
         ) {
@@ -367,7 +576,8 @@ async function postQotd(client) {
                 0;
         }
 
-        // Get the current automatic QOTD
+        // Get the current
+        // automatic QOTD
         question =
             qotdData.questions[
                 qotdData.currentQuestionIndex
@@ -377,19 +587,23 @@ async function postQotd(client) {
             'Question of the Day';
 
         console.log(
+
             `Posting automatic QOTD #${
                 qotdData.currentQuestionIndex + 1
             }: ${question}`
+
         );
 
-        // Move to the next automatic question
+        // Move to the next
+        // automatic question
         qotdData.currentQuestionIndex++;
 
         // Loop back to the first question
         // when reaching the end
         if (
+
             qotdData.currentQuestionIndex >=
-            qotdData.questions.length
+                qotdData.questions.length
         ) {
 
             qotdData.currentQuestionIndex =
@@ -407,8 +621,8 @@ async function postQotd(client) {
 
             // Ping the configured QOTD role
             content:
-                qotdData.roleId
-                    ? `<@&${qotdData.roleId}>`
+                qotdConfig.roleId
+                    ? `<@&${qotdConfig.roleId}>`
                     : '',
 
             // QOTD Embed
@@ -420,7 +634,7 @@ async function postQotd(client) {
                         '🏔️ Question of the Day',
 
                     description:
-                        `**${question}**\n\nProvides your answers in <#${ANSWER_CHANNEL_ID}>`,
+                        `**${question}**\n\nProvide your answers in <#${qotdConfig.answerChannelId}>`,
 
                     color:
                         0x2B2D31,
@@ -436,14 +650,14 @@ async function postQotd(client) {
                 }
             ],
 
-            // Only allow the configured role
-            // to be mentioned
+            // Only allow the configured
+            // role to be mentioned
             allowedMentions: {
 
                 roles:
-                    qotdData.roleId
+                    qotdConfig.roleId
                         ? [
-                            qotdData.roleId
+                            qotdConfig.roleId
                         ]
                         : []
             }
@@ -461,20 +675,31 @@ async function postQotd(client) {
             qotdData
         );
 
-        // Get current Vancouver time
-        const vancouverTime =
-            getVancouverTime();
+        // Get current time in
+        // configured timezone
+        const currentTime =
+            getConfiguredTime(
+                qotdConfig.timezone
+            );
 
         console.log(
+
             `QOTD successfully posted at ${
                 String(
-                    vancouverTime.hour
-                ).padStart(2, '0')
+                    currentTime.hour
+                ).padStart(
+                    2,
+                    '0'
+                )
             }:${
                 String(
-                    vancouverTime.minute
-                ).padStart(2, '0')
-            } Vancouver time.`
+                    currentTime.minute
+                ).padStart(
+                    2,
+                    '0'
+                )
+            } ${qotdConfig.timezone}.`
+
         );
 
     } catch (error) {
@@ -490,23 +715,58 @@ async function postQotd(client) {
 // Start QOTD Scheduler
 // ================================
 
-function startQotdScheduler(client) {
+function startQotdScheduler(
+    client
+) {
 
     console.log(
-        `QOTD scheduler started.`
+        'QOTD scheduler started.'
     );
 
-    console.log(
-        `QOTD timezone: ${QOTD_TIMEZONE}`
-    );
+    const qotdConfig =
+        loadQotdConfig();
+
+    if (
+        qotdConfig
+    ) {
+
+        console.log(
+            `QOTD timezone: ${qotdConfig.timezone}`
+        );
+
+        console.log(
+            `QOTD scheduled time: ${
+                String(
+                    qotdConfig.postHour
+                ).padStart(
+                    2,
+                    '0'
+                )
+            }:${
+                String(
+                    qotdConfig.postMinute
+                ).padStart(
+                    2,
+                    '0'
+                )
+            }`
+        );
+    }
 
     // Check immediately when
     // the bot starts
-    postQotd(client);
+    postQotd(
+        client
+    );
 
     // Continue checking periodically
     setInterval(
-        () => postQotd(client),
+
+        () =>
+            postQotd(
+                client
+            ),
+
         CHECK_INTERVAL
     );
 }
@@ -521,3 +781,4 @@ module.exports = {
 
     postQotd
 };
+

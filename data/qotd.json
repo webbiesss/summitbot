@@ -1,10 +1,5 @@
 {
     "enabled": true,
-    "channelId": "1533251240530546931",
-    "roleId": "828367851907842048",
-    "postHour": 9,
-    "postMinute": 0,
-    "timezone": "America/Vancouver",
     "queuedQuestions": [],
     "currentQuestionIndex": 0,
     "pausedBy": null,
