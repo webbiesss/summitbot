@@ -159,7 +159,7 @@ function getConfiguredTime(
                     '2-digit',
 
                 hour:
-                    '2-digit',
+                    'numeric',
 
                 minute:
                     '2-digit',
@@ -329,7 +329,292 @@ function wasPostedToday(
 }
 
 // ================================
-// Post QOTD
+// Get Next QOTD
+// ================================
+
+function getNextQotd(
+    qotdData
+) {
+
+    let question;
+
+    let qotdType;
+
+    // ================================
+    // Priority 1:
+    // Manually Queued QOTDs
+    // ================================
+
+    if (
+
+        Array.isArray(
+            qotdData.queuedQuestions
+        )
+
+        &&
+
+        qotdData.queuedQuestions.length >
+            0
+    ) {
+
+        // Get the first question
+        // in the queue
+        const queuedQotd =
+            qotdData.queuedQuestions[
+                0
+            ];
+
+        question =
+            queuedQotd.question;
+
+        qotdType =
+            'Queued QOTD';
+
+        // Remove the question
+        // from the queue
+        qotdData.queuedQuestions.shift();
+
+        console.log(
+            `Posting queued QOTD: ${question}`
+        );
+
+        return {
+            question,
+            qotdType
+        };
+    }
+
+    // ================================
+    // Priority 2:
+    // Automatic QOTDs
+    // ================================
+
+    if (
+
+        !Array.isArray(
+            qotdData.questions
+        )
+
+        ||
+
+        qotdData.questions.length ===
+            0
+    ) {
+
+        console.error(
+            'No automatic QOTDs are available.'
+        );
+
+        return null;
+    }
+
+    // Make sure currentQuestionIndex
+    // is valid
+    if (
+
+        !Number.isInteger(
+            qotdData.currentQuestionIndex
+        )
+
+        ||
+
+        qotdData.currentQuestionIndex <
+            0
+
+        ||
+
+        qotdData.currentQuestionIndex >=
+            qotdData.questions.length
+    ) {
+
+        qotdData.currentQuestionIndex =
+            0;
+    }
+
+    // Get the current automatic QOTD
+    question =
+        qotdData.questions[
+            qotdData.currentQuestionIndex
+        ];
+
+    qotdType =
+        'Question of the Day';
+
+    console.log(
+
+        `Posting automatic QOTD #${
+            qotdData.currentQuestionIndex + 1
+        }: ${question}`
+
+    );
+
+    // Move to the next automatic question
+    qotdData.currentQuestionIndex++;
+
+    // Loop back to the first question
+    // when reaching the end
+    if (
+
+        qotdData.currentQuestionIndex >=
+            qotdData.questions.length
+    ) {
+
+        qotdData.currentQuestionIndex =
+            0;
+    }
+
+    return {
+        question,
+        qotdType
+    };
+}
+
+// ================================
+// Send QOTD to Discord
+// ================================
+
+async function sendQotd(
+    client,
+    qotdConfig,
+    qotdData,
+    question,
+    qotdType
+) {
+
+    // ================================
+    // Get Discord Channel
+    // ================================
+
+    const channel =
+        await client.channels
+            .fetch(
+                qotdConfig.channelId
+            )
+            .catch(
+                error => {
+
+                    console.error(
+                        'Error finding QOTD channel:',
+                        error
+                    );
+
+                    return null;
+                }
+            );
+
+    if (
+        !channel
+    ) {
+
+        return false;
+    }
+
+    // ================================
+    // Send QOTD
+    // ================================
+
+    try {
+
+        await channel.send({
+
+            // Ping the configured QOTD role
+            content:
+                qotdConfig.roleId
+                    ? `<@&${qotdConfig.roleId}>`
+                    : '',
+
+            // QOTD Embed
+            embeds: [
+
+                {
+
+                    title:
+                        '🏔️ Question of the Day',
+
+                    description:
+                        `**${question}**\n\nProvide your answers in <#${qotdConfig.answerChannelId}>`,
+
+                    color:
+                        0x2B2D31,
+
+                    footer: {
+
+                        text:
+                            qotdType
+                    },
+
+                    timestamp:
+                        new Date().toISOString()
+                }
+            ],
+
+            // Only allow the configured
+            // role to be mentioned
+            allowedMentions: {
+
+                roles:
+                    qotdConfig.roleId
+                        ? [
+                            qotdConfig.roleId
+                        ]
+                        : []
+            }
+        });
+
+        // ================================
+        // Save Posting Information
+        // ================================
+
+        qotdData.lastPostedAt =
+            new Date().toISOString();
+
+        // Save updated queue/index
+        saveQotdData(
+            qotdData
+        );
+
+        // Get current time in
+        // configured timezone
+        const currentTime =
+            getConfiguredTime(
+                qotdConfig.timezone
+            );
+
+        console.log(
+
+            `QOTD successfully posted at ${
+                String(
+                    currentTime.hour
+                ).padStart(
+                    2,
+                    '0'
+                )
+            }:${
+                String(
+                    currentTime.minute
+                ).padStart(
+                    2,
+                    '0'
+                )
+            } ${qotdConfig.timezone}.`
+
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            'Error posting QOTD:',
+            error
+        );
+
+        return false;
+    }
+}
+
+// ================================
+// Post Scheduled QOTD
 // ================================
 
 async function postQotd(
@@ -450,265 +735,190 @@ async function postQotd(
     }
 
     // ================================
-    // Get Discord Channel
+    // Determine QOTD
     // ================================
 
-    const channel =
-        await client.channels
-            .fetch(
-                qotdConfig.channelId
-            )
-            .catch(
-                error => {
-
-                    console.error(
-                        'Error finding QOTD channel:',
-                        error
-                    );
-
-                    return null;
-                }
-            );
+    const nextQotd =
+        getNextQotd(
+            qotdData
+        );
 
     if (
-        !channel
+        !nextQotd
     ) {
 
         return;
     }
 
     // ================================
-    // Determine QOTD
+    // Send QOTD
     // ================================
 
-    let question;
+    await sendQotd(
 
-    let qotdType;
+        client,
+
+        qotdConfig,
+
+        qotdData,
+
+        nextQotd.question,
+
+        nextQotd.qotdType
+
+    );
+}
+
+// ================================
+// Force QOTD Post
+// ================================
+
+async function forcePostQotd(
+    client
+) {
 
     // ================================
-    // Priority 1:
-    // Manually Queued QOTDs
+    // Load QOTD Data
     // ================================
+
+    const qotdData =
+        loadQotdData();
 
     if (
-
-        Array.isArray(
-            qotdData.queuedQuestions
-        )
-
-        &&
-
-        qotdData.queuedQuestions.length >
-            0
+        !qotdData
     ) {
 
-        // Get the first question
-        // in the queue
-        const queuedQotd =
-            qotdData.queuedQuestions[
-                0
-            ];
+        return {
 
-        question =
-            queuedQotd.question;
+            success:
+                false,
 
-        qotdType =
-            'Queued QOTD';
-
-        // Remove the question
-        // from the queue
-        qotdData.queuedQuestions.shift();
-
-        console.log(
-            `Posting queued QOTD: ${question}`
-        );
-
+            message:
+                'QOTD data could not be loaded.'
+        };
     }
 
     // ================================
-    // Priority 2:
-    // Automatic QOTDs
+    // Load QOTD Configuration
     // ================================
 
-    else {
+    const qotdConfig =
+        loadQotdConfig();
 
-        // Make sure automatic
-        // questions exist
-        if (
+    if (
+        !qotdConfig
+    ) {
 
-            !Array.isArray(
-                qotdData.questions
-            )
+        return {
 
-            ||
+            success:
+                false,
 
-            qotdData.questions.length ===
-                0
-        ) {
+            message:
+                'QOTD configuration could not be loaded.'
+        };
+    }
 
-            console.error(
-                'No automatic QOTDs are available.'
-            );
+    // ================================
+    // Check Required Configuration
+    // ================================
 
-            return;
-        }
+    if (
+        !qotdConfig.channelId
+    ) {
 
-        // Make sure currentQuestionIndex
-        // is valid
-        if (
+        return {
 
-            !Number.isInteger(
-                qotdData.currentQuestionIndex
-            )
+            success:
+                false,
 
-            ||
+            message:
+                'QOTD channel has not been configured.'
+        };
+    }
 
-            qotdData.currentQuestionIndex <
-                0
+    if (
+        !qotdConfig.answerChannelId
+    ) {
 
-            ||
+        return {
 
-            qotdData.currentQuestionIndex >=
-                qotdData.questions.length
-        ) {
+            success:
+                false,
 
-            qotdData.currentQuestionIndex =
-                0;
-        }
+            message:
+                'QOTD answer channel has not been configured.'
+        };
+    }
 
-        // Get the current
-        // automatic QOTD
-        question =
-            qotdData.questions[
-                qotdData.currentQuestionIndex
-            ];
+    // ================================
+    // Determine QOTD
+    // ================================
 
-        qotdType =
-            'Question of the Day';
-
-        console.log(
-
-            `Posting automatic QOTD #${
-                qotdData.currentQuestionIndex + 1
-            }: ${question}`
-
+    const nextQotd =
+        getNextQotd(
+            qotdData
         );
 
-        // Move to the next
-        // automatic question
-        qotdData.currentQuestionIndex++;
+    if (
+        !nextQotd
+    ) {
 
-        // Loop back to the first question
-        // when reaching the end
-        if (
+        return {
 
-            qotdData.currentQuestionIndex >=
-                qotdData.questions.length
-        ) {
+            success:
+                false,
 
-            qotdData.currentQuestionIndex =
-                0;
-        }
+            message:
+                'No QOTD is available to post.'
+        };
     }
 
     // ================================
     // Send QOTD
     // ================================
 
-    try {
+    const posted =
+        await sendQotd(
 
-        await channel.send({
+            client,
 
-            // Ping the configured QOTD role
-            content:
-                qotdConfig.roleId
-                    ? `<@&${qotdConfig.roleId}>`
-                    : '',
+            qotdConfig,
 
-            // QOTD Embed
-            embeds: [
+            qotdData,
 
-                {
+            nextQotd.question,
 
-                    title:
-                        '🏔️ Question of the Day',
-
-                    description:
-                        `**${question}**\n\nProvide your answers in <#${qotdConfig.answerChannelId}>`,
-
-                    color:
-                        0x2B2D31,
-
-                    footer: {
-
-                        text:
-                            qotdType
-                    },
-
-                    timestamp:
-                        new Date().toISOString()
-                }
-            ],
-
-            // Only allow the configured
-            // role to be mentioned
-            allowedMentions: {
-
-                roles:
-                    qotdConfig.roleId
-                        ? [
-                            qotdConfig.roleId
-                        ]
-                        : []
-            }
-        });
-
-        // ================================
-        // Save Posting Information
-        // ================================
-
-        qotdData.lastPostedAt =
-            new Date().toISOString();
-
-        // Save updated queue/index
-        saveQotdData(
-            qotdData
-        );
-
-        // Get current time in
-        // configured timezone
-        const currentTime =
-            getConfiguredTime(
-                qotdConfig.timezone
-            );
-
-        console.log(
-
-            `QOTD successfully posted at ${
-                String(
-                    currentTime.hour
-                ).padStart(
-                    2,
-                    '0'
-                )
-            }:${
-                String(
-                    currentTime.minute
-                ).padStart(
-                    2,
-                    '0'
-                )
-            } ${qotdConfig.timezone}.`
+            nextQotd.qotdType
 
         );
 
-    } catch (error) {
+    if (
+        !posted
+    ) {
 
-        console.error(
-            'Error posting QOTD:',
-            error
-        );
+        return {
+
+            success:
+                false,
+
+            message:
+                'There was an error posting the QOTD.'
+        };
     }
+
+    // ================================
+    // Return Success
+    // ================================
+
+    return {
+
+        success:
+            true,
+
+        question:
+            nextQotd.question
+    };
 }
 
 // ================================
@@ -735,6 +945,7 @@ function startQotdScheduler(
         );
 
         console.log(
+
             `QOTD scheduled time: ${
                 String(
                     qotdConfig.postHour
@@ -750,6 +961,7 @@ function startQotdScheduler(
                     '0'
                 )
             }`
+
         );
     }
 
@@ -779,6 +991,7 @@ module.exports = {
 
     startQotdScheduler,
 
-    postQotd
-};
+    postQotd,
 
+    forcePostQotd
+};

@@ -175,6 +175,16 @@ module.exports = {
                 }
             );
 
+             availableCommands.push(
+                {
+                    name:
+                        '/qotdnow',
+
+                    description:
+                        'Forces the QOTD to be posted.'
+                }
+            );
+
             availableCommands.push({
                  name: '/qotdremove',
                 description: 'Remove a manually queued QOTD from the queue.'
