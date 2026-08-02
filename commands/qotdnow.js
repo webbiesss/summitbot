@@ -35,19 +35,23 @@ module.exports = {
         // Check User Permissions
         // ================================
 
-        if (
-            !interaction.member.roles.cache.has(
-                REQUIRED_ROLE_ID
-            )
-        ) {
+       // Check if the required role exists
+        if (!requiredRole) {
+            console.error(
+                `QOTD required role with ID ${REQUIRED_ROLE_ID} was not found.`
+            );
 
             return interaction.reply({
+                content: 'There was an error checking your permissions.',
+              
+            });
+        }
 
-                content:
-                    'You do not have permission to use this command.',
-
-                ephemeral:
-                    true
+        // Check if the user has the required role or higher
+        if (member.roles.highest.position < requiredRole.position) {
+            return interaction.reply({
+                content: 'World Expeditions\nYou do not have permission to run that command.',
+                ephemeral: true
             });
         }
 
