@@ -15,7 +15,7 @@ const qotdPath = path.join(__dirname, '..', 'data', 'qotd.json');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('addqotd')
+        .setName('qotdadd')
         .setDescription('Queue a Question of the Day')
         .addStringOption(option =>
             option
@@ -42,7 +42,7 @@ module.exports = {
 
             return interaction.reply({
                 content: 'There was an error checking your permissions.',
-                ephemeral: true
+                
             });
         }
 
@@ -67,7 +67,7 @@ module.exports = {
         if (!fs.existsSync(qotdPath)) {
             return interaction.reply({
                 content: 'There was an error finding the QOTD data file.',
-                ephemeral: true
+                
             });
         }
 
@@ -140,7 +140,7 @@ module.exports = {
 
             await interaction.reply({
                 embeds: [embed],
-                ephemeral: true
+               
             });
 
         } catch (error) {

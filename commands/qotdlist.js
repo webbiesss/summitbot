@@ -35,7 +35,7 @@ module.exports = {
 
             return interaction.reply({
                 content: 'There was an error checking your permissions.',
-                ephemeral: true
+              
             });
         }
 
@@ -54,7 +54,7 @@ module.exports = {
         if (!fs.existsSync(qotdPath)) {
             return interaction.reply({
                 content: 'There was an error finding the QOTD data file.',
-                ephemeral: true
+                
             });
         }
 
@@ -177,7 +177,7 @@ module.exports = {
 
                 return interaction.reply({
                     embeds: [embed],
-                    ephemeral: true
+                   
                 });
             }
 
@@ -232,7 +232,7 @@ module.exports = {
 
             await interaction.reply({
                 embeds: [embed],
-                ephemeral: true
+               
             });
 
         } catch (error) {
@@ -242,7 +242,7 @@ module.exports = {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: 'There was an error while retrieving the QOTD list.',
-                    ephemeral: true
+                 
                 });
             }
         }

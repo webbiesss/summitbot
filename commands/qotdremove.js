@@ -76,7 +76,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     'There was an error checking your permissions.',
-                ephemeral: true
+                
             });
         }
 
@@ -122,7 +122,7 @@ module.exports = {
                 return interaction.reply({
                     content:
                         'The QOTD data file could not be found.',
-                    ephemeral: true
+                   
                 });
             }
 
@@ -144,7 +144,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     'There was an error loading the QOTD queue.',
-                ephemeral: true
+            
             });
         }
 
@@ -162,7 +162,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     'There are currently no manually queued QOTDs to remove.',
-                ephemeral: true
+             
             });
         }
 
@@ -178,7 +178,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     `There are only **${qotdData.queuedQuestions.length}** QOTD(s) currently in the manual queue.`,
-                ephemeral: true
+              
             });
         }
 
@@ -227,7 +227,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     'There was an error saving the updated QOTD queue.',
-                ephemeral: true
+                
             });
         }
 

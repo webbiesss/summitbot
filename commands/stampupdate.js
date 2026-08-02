@@ -32,7 +32,7 @@ module.exports = {
 
             return interaction.reply({
                 content: 'There is a configuration error with this command.',
-                ephemeral: true
+               
             });
         }
 

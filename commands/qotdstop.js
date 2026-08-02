@@ -35,7 +35,7 @@ module.exports = {
 
             return interaction.reply({
                 content: 'There was an error checking your permissions.',
-                ephemeral: true
+                
             });
         }
 
@@ -74,7 +74,7 @@ module.exports = {
             if (qotdData.enabled === false) {
                 return interaction.reply({
                     content: 'Automatic QOTD posting is already paused.',
-                    ephemeral: true
+                    
                 });
             }
 
@@ -126,7 +126,7 @@ module.exports = {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: 'There was an error while pausing automatic QOTD posting.',
-                    ephemeral: true
+                    
                 });
             }
         }

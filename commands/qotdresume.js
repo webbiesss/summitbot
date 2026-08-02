@@ -35,7 +35,7 @@ module.exports = {
 
             return interaction.reply({
                 content: 'There was an error checking your permissions.',
-                ephemeral: true
+               
             });
         }
 
@@ -54,7 +54,7 @@ module.exports = {
         if (!fs.existsSync(qotdPath)) {
             return interaction.reply({
                 content: 'There was an error finding the QOTD data file.',
-                ephemeral: true
+              
             });
         }
 
@@ -74,7 +74,7 @@ module.exports = {
             if (qotdData.enabled === true) {
                 return interaction.reply({
                     content: 'Automatic QOTD posting is already active.',
-                    ephemeral: true
+                   
                 });
             }
 
@@ -126,7 +126,7 @@ module.exports = {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: 'There was an error while resuming automatic QOTD posting.',
-                    ephemeral: true
+                    
                 });
             }
         }
