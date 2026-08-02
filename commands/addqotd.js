@@ -128,7 +128,7 @@ module.exports = {
                 .setDescription(
                     `Your QOTD\n` +
                     `"${question}"\n` +
-                    `is **#${queuePosition}** in the queue, and will be produced for the next QOTD.\n\n` +
+                    `is **#${queuePosition}** in the queue, and will be produced for the QOTD.\n\n` +
                     `Use **/qotdremove** to remove your QOTD.`
                 )
                 .setColor(0x2B2D31)
