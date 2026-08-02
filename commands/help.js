@@ -174,6 +174,11 @@ module.exports = {
                         commandDescriptions.qotdresume
                 }
             );
+
+            availableCommands.push({
+                 name: '/qotdremove',
+                description: 'Remove a manually queued QOTD from the queue.'
+            });
         }
 
         // ================================
