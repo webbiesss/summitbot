@@ -132,9 +132,18 @@ module.exports = {
         // Get Guild Member
         // ================================
 
-        const member =
-            interaction.member;
+         let member = interaction.member;
 
+        // interaction.member can be partial for interactions (no roles manager).
+        // Fetch the full GuildMember if needed so role checks work reliably.
+        if (interaction.guild && (!member || !member.roles || !member.roles.highest)) {
+            try {
+                member = await interaction.guild.members.fetch(interaction.user.id);
+            } catch (err) {
+                console.error('Failed to fetch guild member for help command:', err);
+                member = interaction.member; // fall back to whatever we have
+            }
+        }
         // ================================
         // Create Command List
         // ================================
