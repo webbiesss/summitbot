@@ -102,7 +102,7 @@ for (const file of commandFiles) {
 // ================================
 
 client.once(
-    'clientReady',
+    'ready',
     () => {
 
         console.log(

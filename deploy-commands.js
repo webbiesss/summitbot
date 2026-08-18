@@ -41,42 +41,18 @@ for (const file of commandFiles) {
     );
 
     try {
+     const command = require(filePath);
 
-        const command = require(
-            filePath
-        );
-
-        // Make sure the command has
-        // the required data property
-        if (
-            command.data &&
-            command.data.toJSON
-        ) {
-
-            commands.push(
-                command.data.toJSON()
-            );
-
-            console.log(
-                `Preparing command: /${command.data.name}`
-            );
-
+        if (command.data && command.data.toJSON) {
+            commands.push(command.data.toJSON());
+            console.log(`Preparing command: /${command.data.name}`);
         } else {
-
-            console.warn(
-                `Skipping ${file}: Missing command.data`
-            );
+            console.warn(`Skipping ${file}: Missing command.data`);
         }
-
     } catch (error) {
-
-        console.error(
-            `Error loading command ${file}:`,
-            error
-        );
+    console.error(`Error loading command ${file}:`, error);
     }
 }
-
 // ================================
 // Discord REST API
 // ================================
