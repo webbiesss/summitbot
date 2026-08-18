@@ -104,7 +104,7 @@ module.exports = {
 
         users.push({
             username: username,
-            summits: 0
+            summits: 1
         });
 
         // Sort alphabetically
@@ -129,7 +129,7 @@ module.exports = {
             .setTitle('World Expeditions Guide Department')
             .setDescription(
                 `✅ Successfully added **${username}** to the Roblox climber database.\n\n` +
-                `Current Summit Stamps: **0 🏔️**`
+                `Current Summit Stamps: **1 🏔️**`
             )
             .setColor(0x00AEFF)
             .setFooter({

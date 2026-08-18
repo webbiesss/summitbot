@@ -69,49 +69,47 @@ const commandDescriptions = {
 // Check Role Hierarchy
 // ================================
 
+// ...existing code...
+
 function hasRequiredRole(
     member,
     requiredRoleId
 ) {
 
-    // Make sure the member exists
-    if (!member) {
+    // Make sure the member and guild exist
+    if (!member || !member.guild) {
         return false;
     }
 
     // Server owner always has access
-    if (
-        member.guild.ownerId ===
-        member.id
-    ) {
-
+    if (member.guild.ownerId === member.id) {
         return true;
     }
 
-    // Get the required role
+    // Get the required role from the guild
     const requiredRole =
-        member.guild.roles.cache.get(
-            requiredRoleId
-        );
+        member.guild.roles?.cache.get(requiredRoleId);
 
-    // Required role does not exist
     if (!requiredRole) {
-
         console.warn(
             `Required role ${requiredRoleId} could not be found.`
         );
-
         return false;
     }
 
-    // Check if the user's highest role
-    // is equal to or higher than the
-    // required role
+    // If roles info isn't available on the member, deny access
+    if (!member.roles || !member.roles.highest) {
+        return false;
+    }
+
+    // Compare highest role positions
     return (
         member.roles.highest.position >=
         requiredRole.position
     );
 }
+
+// ...existing code...
 
 // ================================
 // Command
