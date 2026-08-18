@@ -28,9 +28,9 @@ module.exports = {
         // Required Role
         // ================================
 
-        const REQUIRED_ROLE_ID =
-            '1528783752199929896';
+        const { getRoleId } = require('../utils/config');
 
+        const REQUIRED_ROLE_ID = getRoleId('staff');
         // ================================
         // Check User Permissions
         // ================================

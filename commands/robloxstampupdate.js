@@ -20,8 +20,9 @@ module.exports = {
         // ==========================================
         // REQUIRED ROLE
         // ==========================================
+        const { getRoleId } = require('../utils/config');
 
-        const requiredRoleId = '827956660638318592';
+        const requiredRoleId = getRoleId('guide');
 
         const commandUser = interaction.member;
         const requiredRole = interaction.guild.roles.cache.get(requiredRoleId);

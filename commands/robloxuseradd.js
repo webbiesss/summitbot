@@ -2,7 +2,9 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-const REQUIRED_ROLE_ID = '827956660638318592';
+const { getRoleId } = require('../utils/config');
+
+const REQUIRED_ROLE_ID = getRoleId('guide');
 
 module.exports = {
     data: new SlashCommandBuilder()

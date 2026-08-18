@@ -21,7 +21,9 @@ module.exports = {
         // REQUIRED ROLE FOR /STAMPUPDATE
         // ==========================================
 
-        const requiredRoleId = '827956660638318592';
+        const { getRoleId } = require('../utils/config');
+
+        const requiredRoleId = getRoleId('guide');
 
         const commandUser = interaction.member;
 

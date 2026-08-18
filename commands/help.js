@@ -45,7 +45,24 @@ const commandDescriptions = {
         'View the leaderboard showing climbers ranked by summit stamps.',
 
     help:
-        'View a list of World Expedition Manager commands that you have permission to use.'
+        'View a list of World Expedition Manager commands that you have permission to use.',
+    robloxstamplist:
+        'List Roblox stamp entries currently stored in the system.',
+
+    robloxstampupdate:
+        'Update a Roblox user\'s stamp total.',
+
+    robloxstampview:
+        'View a Roblox user\'s stamp total and related info.',
+
+    robloxuseradd:
+        'Add a Roblox user to the tracking system.',
+
+    robloxuserremove:
+        'Remove a Roblox user from the tracking system.',
+
+    transferrobloxuser:
+        'Transfer a Roblox user (and their stamps) to another account.'    
 };
 
 // ================================
@@ -211,6 +228,36 @@ module.exports = {
                         commandDescriptions.stampupdate
                 }
             );
+            // Roblox-related commands (require STAMPUPDATE role)
+            availableCommands.push({
+                name: '/robloxstamplist',
+                description: commandDescriptions.robloxstamplist
+            });
+
+            availableCommands.push({
+                name: '/robloxstampupdate',
+                description: commandDescriptions.robloxstampupdate
+            });
+
+            availableCommands.push({
+                name: '/robloxstampview',
+                description: commandDescriptions.robloxstampview
+            });
+
+            availableCommands.push({
+                name: '/robloxuseradd',
+                description: commandDescriptions.robloxuseradd
+            });
+
+            availableCommands.push({
+                name: '/robloxuserremove',
+                description: commandDescriptions.robloxuserremove
+            });
+
+            availableCommands.push({
+                name: '/transferrobloxuser',
+                description: commandDescriptions.transferrobloxuser
+            });
         }
 
         // ================================

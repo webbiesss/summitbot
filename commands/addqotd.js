@@ -8,7 +8,9 @@ const path = require('path');
 
 // Replace this with the Discord Role ID
 // of the minimum role required to use /addqotd
-const REQUIRED_ROLE_ID = '1528783752199929896';
+const { getRoleId } = require('../utils/config');
+
+const REQUIRED_ROLE_ID = getRoleId('staff');
 
 // Location of QOTD data
 const qotdPath = path.join(__dirname, '..', 'data', 'qotd.json');
