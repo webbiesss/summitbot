@@ -40,6 +40,20 @@ const COOLDOWN_TIME = 3000;
 const cooldowns = new Collection();
 
 // ================================
+// Cooldown Cleanup
+// ================================
+
+// Clean up expired cooldowns every minute to prevent memory leaks
+setInterval(() => {
+    const now = Date.now();
+    for (const [userId, expirationTime] of cooldowns.entries()) {
+        if (now >= expirationTime) {
+            cooldowns.delete(userId);
+        }
+    }
+}, 60000);
+
+// ================================
 // Load Commands
 // ================================
 

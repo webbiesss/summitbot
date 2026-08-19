@@ -27,6 +27,12 @@ const qotdConfigPath = path.join(
 const CHECK_INTERVAL = 1800000;
 
 // ================================
+// QOTD Scheduler Interval Storage
+// ================================
+
+let qotdSchedulerInterval;
+
+// ================================
 // Helper Functions
 // ================================
 
@@ -972,7 +978,7 @@ function startQotdScheduler(
     );
 
     // Continue checking periodically
-    setInterval(
+    qotdSchedulerInterval = setInterval(
 
         () =>
             postQotd(
@@ -984,12 +990,36 @@ function startQotdScheduler(
 }
 
 // ================================
+// Stop QOTD Scheduler
+// ================================
+
+function stopQotdScheduler() {
+
+    if (
+        qotdSchedulerInterval
+    ) {
+
+        clearInterval(
+            qotdSchedulerInterval
+        );
+
+        qotdSchedulerInterval = null;
+
+        console.log(
+            'QOTD scheduler stopped.'
+        );
+    }
+}
+
+// ================================
 // Export
 // ================================
 
 module.exports = {
 
     startQotdScheduler,
+
+    stopQotdScheduler,
 
     postQotd,
 
