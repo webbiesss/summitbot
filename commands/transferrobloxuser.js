@@ -111,7 +111,7 @@ module.exports = {
                 `Transferring summit stamps: **${transferredSummits} 🏔️**`
             )
             .setColor(0x00FF00);
-        await interaction.reply({ embeds: [confirmationEmbed], ephemeral: false });
+        
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
@@ -123,9 +123,11 @@ module.exports = {
                     .setLabel('Cancel Transfer')
                     .setStyle(ButtonStyle.Danger)
             );
-        await interaction.followUp({ content: 'Please confirm everything is correct before proceeding.', components: [row], ephemeral: true });
         
-        const collector = interaction.channel.createMessageComponentCollector({ time: 60000 });
+        await interaction.reply({ embeds: [confirmationEmbed], components: [row], ephemeral: true });
+        const response = await interaction.fetchReply();
+        
+        const collector = response.createMessageComponentCollector({ time: 60000 });
 
         collector.on('collect', async i => {
             if (i.user.id !== interaction.user.id) {
@@ -165,7 +167,7 @@ module.exports = {
                     }
                 } catch (err) {
                     console.error('Failed to write climber databases', err);
-                    return interaction.reply({ content: 'Failed to save the updated climber databases.', ephemeral: true });
+                    return interaction.followUp({ content: 'Failed to save the updated climber databases.', ephemeral: true });
                 }
 
                 console.log(`Transferred ${username} to ${newdiscorduser.tag} (${newdiscorduser.id}) with ${transferredSummits} summit stamps.`);
@@ -178,11 +180,19 @@ module.exports = {
                     )
                     .setColor(0x00FF00);
 
-                return interaction.reply({ embeds: [successEmbed] });
+                return interaction.followUp({ embeds: [successEmbed] });
             }
 
             if (reason === 'cancelled') {
                 return interaction.followUp({ embeds: [cancelEmbed], ephemeral: true });
+            }
+
+            if (reason === 'time') {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setTitle('World Expeditions Guide Department')
+                    .setDescription('Transfer confirmation timed out. Please run the command again.')
+                    .setColor(0xFF9900);
+                return interaction.followUp({ embeds: [timeoutEmbed], ephemeral: true });
             }
         });
     }
