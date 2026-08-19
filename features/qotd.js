@@ -21,10 +21,9 @@ const qotdConfigPath = path.join(
     'qotdconfig.json'
 );
 
-// How often the bot checks if it is time
-// to post a QOTD
-// 30 seconds = 30,000 milliseconds
-const CHECK_INTERVAL = 1800000;
+// Check once per minute so the scheduler cannot skip
+// the configured posting minute.
+const CHECK_INTERVAL = 60000;
 
 // ================================
 // QOTD Scheduler Interval Storage
@@ -247,18 +246,15 @@ function isTimeForQotd(
     const currentMinute =
         currentTime.minute;
 
-    // Check if the current time matches
-    // the configured QOTD time
-    return (
+    // Treat the QOTD as due once today's scheduled time has passed.
+    // This prevents interval timing or a bot restart from skipping it.
+    const currentMinutes =
+        currentHour * 60 + currentMinute;
 
-        currentHour ===
-            qotdConfig.postHour
+    const scheduledMinutes =
+        qotdConfig.postHour * 60 + qotdConfig.postMinute;
 
-        &&
-
-        currentMinute ===
-            qotdConfig.postMinute
-    );
+    return currentMinutes >= scheduledMinutes;
 }
 
 // ================================
