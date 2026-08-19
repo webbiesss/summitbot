@@ -1,4 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require('discord.js');
+
 const fs = require('fs');
 const path = require('path');
 
@@ -55,19 +62,27 @@ module.exports = {
         }
 
         const username = usernameRaw.trim();
-        const dbPath = path.join(__dirname, '..', 'data', 'robloxusers.json');
+        const robloxDbPath = path.join(__dirname, '..', 'data', 'robloxusers.json');
+        const climbersDbPath = path.join(__dirname, '..', 'data', 'climbers.json');
 
-        // Load database
+        // Load both databases before changing either one.
         let users = [];
+        let climbers = {};
         try {
-            if (fs.existsSync(dbPath)) {
-                const raw = fs.readFileSync(dbPath, 'utf8');
+            if (fs.existsSync(robloxDbPath)) {
+                const raw = fs.readFileSync(robloxDbPath, 'utf8');
                 users = JSON.parse(raw || '[]');
-                if (!Array.isArray(users)) users = [];
+                if (!Array.isArray(users)) {
+                    throw new Error('robloxusers.json must contain an array');
+                }
+            }
+            climbers = JSON.parse(fs.readFileSync(climbersDbPath, 'utf8') || '{}');
+            if (!climbers || Array.isArray(climbers) || typeof climbers !== 'object') {
+                throw new Error('climbers.json must contain an object');
             }
         } catch (err) {
-            console.error('Failed to read or parse robloxusers.json', err);
-            return interaction.reply({ content: 'Failed to read the climber database.', ephemeral: true });
+            console.error('Failed to read or parse climber databases', err);
+            return interaction.reply({ content: 'Failed to read the climber databases.', ephemeral: true });
         }
 
         // Find user
@@ -82,25 +97,93 @@ module.exports = {
                     `If the climber is not listed, add summit stamps to their discord profile using **/stampupdate**.`
                 )
                 .setColor(0xFF0000);
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.reply({ embeds: [embed], ephemeral: false });
         }
 
-        // Transfer ownership
-        users[userIndex].discordId = newdiscorduser.id;
+        const robloxUser = users[userIndex];
+        const existingSummits = Number(climbers[newdiscorduser.id]?.summits) || 0;
+        const transferredSummits = Number(robloxUser.summits) || 0;
 
-        // Save database
-        try {
-            fs.writeFileSync(dbPath, JSON.stringify(users, null, 2), 'utf8');
-        } catch (err) {
-            console.error('Failed to write robloxusers.json', err);
-            return interaction.reply({ content: 'Failed to save the updated climber database.', ephemeral: true });
-        }
-
-        const successEmbed = new EmbedBuilder()
+        const confirmationEmbed = new EmbedBuilder()
             .setTitle('World Expeditions Guide Department')
-            .setDescription(`✅ Successfully transferred **${username}** to <@${newdiscorduser.id}>.`)
+            .setDescription(
+                `Are you sure you want to transfer **${username}** to <@${newdiscorduser.id}>?\n\n` +
+                `Transferring summit stamps: **${transferredSummits} 🏔️**`
+            )
             .setColor(0x00FF00);
+        await interaction.reply({ embeds: [confirmationEmbed], ephemeral: false });
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('confirm_transfer')
+                    .setLabel('Confirm Transfer')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('cancel_transfer')
+                    .setLabel('Cancel Transfer')
+                    .setStyle(ButtonStyle.Danger)
+            );
+        await interaction.followUp({ content: 'Please confirm everything is correct before proceeding.', components: [row], ephemeral: true });
+        
+        const collector = interaction.channel.createMessageComponentCollector({ time: 60000 });
 
-        return interaction.reply({ embeds: [successEmbed] });
+        collector.on('collect', async i => {
+            if (i.user.id !== interaction.user.id) {
+                return i.reply({ content: 'You cannot confirm this transfer.', ephemeral: true });
+            }
+            if (i.customId === 'confirm_transfer') {
+                collector.stop('confirmed');
+            } else if (i.customId === 'cancel_transfer') {
+                collector.stop('cancelled');
+            }
+            await i.update({ components: [] });
+        });
+      
+        const cancelEmbed = new EmbedBuilder()
+            .setTitle('World Expeditions Guide Department')
+            .setDescription('Transfer cancelled.')
+            .setColor(0xFF0000);
+      
+        collector.on('end', async (collected, reason) => {
+            if (reason === 'confirmed') {
+                // Proceed with transfer
+                climbers[newdiscorduser.id] = {
+                    ...(climbers[newdiscorduser.id] || {}),
+                    summits: existingSummits + transferredSummits
+                };
+                users.splice(userIndex, 1);
+
+                // Save both databases and restore the first file if the second write fails.
+                try {
+                    const originalClimbers = fs.readFileSync(climbersDbPath, 'utf8');
+                    fs.writeFileSync(climbersDbPath, JSON.stringify(climbers, null, 2), 'utf8');
+                    try {
+                        fs.writeFileSync(robloxDbPath, JSON.stringify(users, null, 2), 'utf8');
+                    } catch (err) {
+                        fs.writeFileSync(climbersDbPath, originalClimbers, 'utf8');
+                        throw err;
+                    }
+                } catch (err) {
+                    console.error('Failed to write climber databases', err);
+                    return interaction.reply({ content: 'Failed to save the updated climber databases.', ephemeral: true });
+                }
+
+                console.log(`Transferred ${username} to ${newdiscorduser.tag} (${newdiscorduser.id}) with ${transferredSummits} summit stamps.`);
+
+                const successEmbed = new EmbedBuilder()
+                    .setTitle('World Expeditions Guide Department')
+                    .setDescription(
+                        `✅ Successfully transferred **${username}** to <@${newdiscorduser.id}>.\n\n` +
+                        `Transferred summit stamps: **${transferredSummits} 🏔️**`
+                    )
+                    .setColor(0x00FF00);
+
+                return interaction.reply({ embeds: [successEmbed] });
+            }
+
+            if (reason === 'cancelled') {
+                return interaction.followUp({ embeds: [cancelEmbed], ephemeral: true });
+            }
+        });
     }
 };
