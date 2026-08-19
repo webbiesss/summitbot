@@ -178,7 +178,10 @@ module.exports = {
                         `✅ Successfully transferred **${username}** to <@${newdiscorduser.id}>.\n\n` +
                         `Transferred summit stamps: **${transferredSummits} 🏔️**`
                     )
-                    .setColor(0x00FF00);
+                    .setColor(0x00FF00)
+                    .setFooter({
+                        text: `Added by ${interaction.user.username} • ${new Date().toISOString()}`
+                    });
 
                 return interaction.followUp({ embeds: [successEmbed] });
             }
@@ -191,10 +194,7 @@ module.exports = {
                 const timeoutEmbed = new EmbedBuilder()
                     .setTitle('World Expeditions Guide Department')
                     .setDescription('Transfer confirmation timed out. Please run the command again.')
-                    .setColor(0xFF9900)
-                    .setFooter({
-                        text: `Added by ${interaction.user.username} • ${new Date().toISOString()}`
-                    });
+                    .setColor(0xFF9900);
                 return interaction.followUp({ embeds: [timeoutEmbed], ephemeral: true });
             }
         });
