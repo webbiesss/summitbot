@@ -310,6 +310,7 @@ module.exports = {
         // Build Command List
         // ================================
 
+        const commandFields = [];
         let commandList = '';
 
         for (
@@ -317,9 +318,37 @@ module.exports = {
             of availableCommands
         ) {
 
-            commandList +=
+            const commandText =
                 `**${command.name}**\n` +
                 `${command.description}\n\n`;
+
+            if (
+                commandList &&
+                commandList.length + commandText.length > 1024
+            ) {
+                commandFields.push({
+                    name:
+                        commandFields.length === 0
+                            ? 'Available Commands'
+                            : 'Available Commands (continued)',
+                    value:
+                        commandList
+                });
+                commandList = '';
+            }
+
+            commandList += commandText;
+        }
+
+        if (commandList) {
+            commandFields.push({
+                name:
+                    commandFields.length === 0
+                        ? 'Available Commands'
+                        : 'Available Commands (continued)',
+                value:
+                    commandList
+            });
         }
 
         // ================================
@@ -338,14 +367,14 @@ module.exports = {
                 )
 
                 .addFields(
-                    {
-                        name:
-                            'Available Commands',
-
-                        value:
-                            commandList ||
-                            'You currently do not have access to any commands.'
-                    }
+                    commandFields.length > 0
+                        ? commandFields
+                        : {
+                            name:
+                                'Available Commands',
+                            value:
+                                'You currently do not have access to any commands.'
+                        }
                 )
 
                 .setColor(
