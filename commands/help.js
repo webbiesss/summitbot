@@ -310,46 +310,65 @@ module.exports = {
         // Build Command List
         // ================================
 
-        const commandFields = [];
-        let commandList = '';
-
-        for (
-            const command
-            of availableCommands
-        ) {
-
-            const commandText =
-                `**${command.name}**\n` +
-                `${command.description}\n\n`;
-
-            if (
-                commandList &&
-                commandList.length + commandText.length > 1024
-            ) {
-                commandFields.push({
-                    name:
-                        commandFields.length === 0
-                            ? 'Available Commands'
-                            : 'Available Commands (continued)',
-                    value:
-                        commandList
-                });
-                commandList = '';
+        const commandCategories = [
+            {
+                name: 'Roblox Commands',
+                commandNames: [
+                    '/robloxstamplist',
+                    '/robloxstampupdate',
+                    '/robloxstampview',
+                    '/robloxuseradd',
+                    '/robloxuserremove',
+                    '/transferrobloxuser'
+                ]
+            },
+            {
+                name: 'QOTD Commands',
+                commandNames: [
+                    '/qotdadd',
+                    '/qotdlist',
+                    '/qotdstop',
+                    '/qotdresume',
+                    '/qotdnow',
+                    '/qotdremove'
+                ]
+            },
+            {
+                name: 'Guide Commands',
+                commandNames: [
+                    '/stampupdate'
+                ]
+            },
+            {
+                name: 'General Commands',
+                commandNames: [
+                    '/leaderboard',
+                    '/profile',
+                    '/help'
+                ]
             }
+        ];
 
-            commandList += commandText;
-        }
+        const commandFields = commandCategories
+            .map(category => {
+                const commands = availableCommands.filter(command =>
+                    category.commandNames.includes(command.name)
+                );
 
-        if (commandList) {
-            commandFields.push({
-                name:
-                    commandFields.length === 0
-                        ? 'Available Commands'
-                        : 'Available Commands (continued)',
-                value:
-                    commandList
-            });
-        }
+                if (commands.length === 0) {
+                    return null;
+                }
+
+                return {
+                    name:
+                        category.name,
+                    value:
+                        commands.map(command =>
+                            `**${command.name}**\n${command.description}`
+                        ).join('\n\n')
+                };
+            })
+            .filter(Boolean);
 
         // ================================
         // Create Embed
