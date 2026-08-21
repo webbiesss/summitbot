@@ -162,7 +162,7 @@ module.exports = {
             availableCommands.push(
                 {
                     name:
-                        '/addqotd',
+                        '/qotdadd',
 
                     description:
                         commandDescriptions.addqotd
