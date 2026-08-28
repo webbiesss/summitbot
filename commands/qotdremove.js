@@ -32,7 +32,7 @@ module.exports = {
         new SlashCommandBuilder()
             .setName('qotdremove')
             .setDescription(
-                'Remove a manually queued QOTD.'
+                'Remove a queued or automatic QOTD.'
             )
 
             .addIntegerOption(
@@ -40,7 +40,7 @@ module.exports = {
                     option
                         .setName('number')
                         .setDescription(
-                            'The position of the QOTD in the queue to remove.'
+                            'The position of the QOTD in the list to remove.'
                         )
                         .setRequired(true)
                         .setMinValue(1)
@@ -152,16 +152,22 @@ module.exports = {
         // Check Queue
         // ================================
 
+        if (!Array.isArray(qotdData.queuedQuestions)) {
+            qotdData.queuedQuestions = [];
+        }
+
+        if (!Array.isArray(qotdData.questions)) {
+            qotdData.questions = [];
+        }
+
         if (
-            !Array.isArray(
-                qotdData.queuedQuestions
-            ) ||
-            qotdData.queuedQuestions.length === 0
+            qotdData.queuedQuestions.length === 0 &&
+            qotdData.questions.length === 0
         ) {
 
             return interaction.reply({
                 content:
-                    'There are currently no manually queued QOTDs to remove.',
+                    'There are currently no QOTDs to remove.',
              
             });
         }
@@ -170,14 +176,15 @@ module.exports = {
         // Check Position
         // ================================
 
-        if (
-            queuePosition >
-            qotdData.queuedQuestions.length
-        ) {
+        const totalQotds =
+            qotdData.queuedQuestions.length +
+            qotdData.questions.length;
+
+        if (queuePosition > totalQotds) {
 
             return interaction.reply({
                 content:
-                    `There are only **${qotdData.queuedQuestions.length}** QOTD(s) currently in the manual queue.`,
+                    `There are only **${totalQotds}** QOTD(s) currently available to remove.`,
               
             });
         }
@@ -186,21 +193,45 @@ module.exports = {
         // Remove QOTD
         // ================================
 
-        // Convert queue position to array index
-        const queueIndex =
-            queuePosition - 1;
+        let removedQuestion;
+        let removedType;
 
-        // Get the QOTD before removing it
-        const removedQotd =
-            qotdData.queuedQuestions[
-                queueIndex
-            ];
+        if (queuePosition <= qotdData.queuedQuestions.length) {
+            const queueIndex = queuePosition - 1;
+            const removedQotd = qotdData.queuedQuestions[queueIndex];
 
-        // Remove the QOTD
-        qotdData.queuedQuestions.splice(
-            queueIndex,
-            1
-        );
+            removedQuestion = removedQotd.question;
+            removedType = 'queued';
+
+            qotdData.queuedQuestions.splice(queueIndex, 1);
+        } else {
+            const automaticOffset =
+                queuePosition - qotdData.queuedQuestions.length - 1;
+            const automaticCount = qotdData.questions.length;
+            const currentQuestionIndex = Number.isInteger(
+                qotdData.currentQuestionIndex
+            ) && qotdData.currentQuestionIndex >= 0 &&
+                qotdData.currentQuestionIndex < automaticCount
+                ? qotdData.currentQuestionIndex
+                : 0;
+            const automaticIndex =
+                (currentQuestionIndex + automaticOffset) % automaticCount;
+
+            removedQuestion = qotdData.questions[automaticIndex];
+            removedType = 'automatic';
+
+            qotdData.questions.splice(automaticIndex, 1);
+
+            if (qotdData.questions.length === 0) {
+                qotdData.currentQuestionIndex = 0;
+            } else if (automaticIndex < currentQuestionIndex) {
+                qotdData.currentQuestionIndex = currentQuestionIndex - 1;
+            } else if (currentQuestionIndex >= qotdData.questions.length) {
+                qotdData.currentQuestionIndex = 0;
+            } else {
+                qotdData.currentQuestionIndex = currentQuestionIndex;
+            }
+        }
 
         // ================================
         // Save Updated Data
@@ -232,13 +263,6 @@ module.exports = {
         }
 
         // ================================
-        // Get Removed Question
-        // ================================
-
-        const removedQuestion =
-            removedQotd.question;
-
-        // ================================
         // Create Response Embed
         // ================================
 
@@ -250,13 +274,13 @@ module.exports = {
                 )
 
                 .setDescription(
-                    `**Question of the day removed**\nThe following QOTD has been removed from the queue:\n\n**"${removedQuestion}"**`
+                    `**Question of the day removed**\nThe following ${removedType} QOTD has been removed:\n\n**"${removedQuestion}"**`
                 )
 
                 .addFields(
                     {
                         name:
-                            'Queue Position',
+                            'List Position',
 
                         value:
                             `#${queuePosition}`,
