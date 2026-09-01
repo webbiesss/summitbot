@@ -5,15 +5,42 @@ const path = require('path');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('stampupdate')
-        .setDescription('Update a climber’s summit stamps')
-        .addUserOption(option =>
-            option.setName('climber')
-                .setDescription('The climber to update')
-                .setRequired(true))
+        .setDescription('Update up to 10 climbers’ summit stamps')
         .addIntegerOption(option =>
             option.setName('amount')
-                .setDescription('Number of summit stamps to add')
-                .setRequired(true)),
+                .setDescription('Number of summit stamps to add to each climber')
+                .setRequired(true))
+        .addUserOption(option =>
+            option.setName('climber1')
+                .setDescription('The first climber to update')
+                .setRequired(true))
+        .addUserOption(option =>
+            option.setName('climber2')
+                .setDescription('A second climber to update'))
+        .addUserOption(option =>
+            option.setName('climber3')
+                .setDescription('A third climber to update'))
+        .addUserOption(option =>
+            option.setName('climber4')
+                .setDescription('A fourth climber to update'))
+        .addUserOption(option =>
+            option.setName('climber5')
+                .setDescription('A fifth climber to update'))
+        .addUserOption(option =>
+            option.setName('climber6')
+                .setDescription('A sixth climber to update'))
+        .addUserOption(option =>
+            option.setName('climber7')
+                .setDescription('A seventh climber to update'))
+        .addUserOption(option =>
+            option.setName('climber8')
+                .setDescription('An eighth climber to update'))
+        .addUserOption(option =>
+            option.setName('climber9')
+                .setDescription('A ninth climber to update'))
+        .addUserOption(option =>
+            option.setName('climber10')
+                .setDescription('A tenth climber to update')),
 
     async execute(interaction) {
 
@@ -33,8 +60,7 @@ module.exports = {
             console.error('The required role for /stampupdate could not be found.');
 
             return interaction.reply({
-                content: 'There is a configuration error with this command.',
-               
+                content: 'There is a configuration error with this command.'
             });
         }
 
@@ -57,48 +83,45 @@ module.exports = {
 
 
         // ==========================================
-        // GET CLIMBER AND AMOUNT
+        // GET CLIMBERS AND AMOUNT
         // ==========================================
 
-        const climber = interaction.options.getUser('climber');
         const amount = interaction.options.getInteger('amount');
+        const climbers = [];
+
+        for (let i = 1; i <= 10; i++) {
+            const climber = interaction.options.getUser(`climber${i}`);
+
+            if (climber) {
+                climbers.push(climber);
+            }
+        }
+
+        const uniqueClimbers = [...new Map(
+            climbers.map(climber => [climber.id, climber])
+        ).values()];
+
+        if (uniqueClimbers.length === 0) {
+            return interaction.reply({
+                content: 'You must provide at least one climber to update.',
+                ephemeral: true
+            });
+        }
 
 
         // ==========================================
         // DATABASE
         // ==========================================
 
-        const dbPath = path.join(__dirname, '..', 'data', 'climbers.json');
-
-        let db = JSON.parse(fs.readFileSync(dbPath));
-
-        if (!db[climber.id]) {
-            db[climber.id] = { summits: 0 };
-        }
-
-        const initialTotal = db[climber.id].summits;
-
-        // Add summit stamps
-        db[climber.id].summits += amount;
-
-        const total = db[climber.id].summits;
-
-        // Save database
-        fs.writeFileSync(
-            dbPath,
-            JSON.stringify(db, null, 2)
-        );
-
-
         // ==========================================
         // LEVEL REQUIREMENTS
         // ==========================================
 
-        let improvingclimber = 2;
-        let intermediateclimber = 5;
-        let experiencedclimber = 9;
-        let advancedclimber = 14;
-        let eliteclimber = 20;
+        const improvingclimber = 2;
+        const intermediateclimber = 5;
+        const experiencedclimber = 9;
+        const advancedclimber = 14;
+        const eliteclimber = 20;
 
 
         // ==========================================
@@ -107,15 +130,10 @@ module.exports = {
 
         const roles = {
             climber: '827956665989988402',
-
             improving: '827956665424281690',
-
             intermediate: '827956664878891018',
-
             experienced: '827956663902273548',
-
             advanced: '827956663721001010',
-
             elite: '827956662748315660'
         };
 
@@ -125,7 +143,6 @@ module.exports = {
         // ==========================================
 
         function getLevel(summits) {
-
             if (summits >= eliteclimber) {
                 return {
                     name: 'Elite Climber',
@@ -167,90 +184,88 @@ module.exports = {
             };
         }
 
+        const dbPath = path.join(__dirname, '..', 'data', 'climbers.json');
+        const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
 
-        const oldLevel = getLevel(initialTotal);
-        const newLevel = getLevel(total);
+        const updateResults = [];
 
-
-        // ==========================================
-        // DETECT LEVEL UP
-        // ==========================================
-
-        const leveledUp =
-            oldLevel.name !== newLevel.name;
-
-
-        // ==========================================
-        // GET DISCORD MEMBER
-        // ==========================================
-
-        const member = await interaction.guild.members.fetch(climber.id);
-
-
-        // ==========================================
-        // REMOVE ALL CLIMBER LEVEL ROLES
-        // ==========================================
-
-        const allClimberRoles = [
-            roles.climber,
-            roles.improving,
-            roles.intermediate,
-            roles.experienced,
-            roles.advanced,
-            roles.elite
-        ];
-
-        for (const roleId of allClimberRoles) {
-
-            if (member.roles.cache.has(roleId)) {
-
-                await member.roles.remove(roleId)
-                    .catch(error => {
-                        console.error(
-                            `Could not remove role ${roleId}:`,
-                            error
-                        );
-                    });
-
+        for (const climber of uniqueClimbers) {
+            if (!db[climber.id]) {
+                db[climber.id] = { summits: 0 };
             }
+
+            const initialTotal = db[climber.id].summits;
+            db[climber.id].summits += amount;
+            const total = db[climber.id].summits;
+
+            const oldLevel = getLevel(initialTotal);
+            const newLevel = getLevel(total);
+            const leveledUp = oldLevel.name !== newLevel.name;
+
+            const member = await interaction.guild.members.fetch(climber.id);
+
+            const allClimberRoles = [
+                roles.climber,
+                roles.improving,
+                roles.intermediate,
+                roles.experienced,
+                roles.advanced,
+                roles.elite
+            ];
+
+            for (const roleId of allClimberRoles) {
+                if (member.roles.cache.has(roleId)) {
+                    await member.roles.remove(roleId)
+                        .catch(error => {
+                            console.error(
+                                `Could not remove role ${roleId}:`,
+                                error
+                            );
+                        });
+                }
+            }
+
+            await member.roles.add(newLevel.roleId)
+                .catch(error => {
+                    console.error(
+                        `Could not add role ${newLevel.roleId}:`,
+                        error
+                    );
+                });
+
+            updateResults.push({
+                climber,
+                initialTotal,
+                total,
+                oldLevel,
+                newLevel,
+                leveledUp
+            });
         }
 
-
-        // ==========================================
-        // GIVE ONLY HIGHEST QUALIFYING ROLE
-        // ==========================================
-
-        await member.roles.add(newLevel.roleId)
-            .catch(error => {
-                console.error(
-                    `Could not add role ${newLevel.roleId}:`,
-                    error
-                );
-            });
+        fs.writeFileSync(
+            dbPath,
+            JSON.stringify(db, null, 2)
+        );
 
 
         // ==========================================
         // CREATE RESPONSE
         // ==========================================
 
-        let description;
+        const summaryText = updateResults
+            .map(({ climber, initialTotal, total, leveledUp, oldLevel, newLevel }) => {
+                const levelLine = leveledUp
+                    ? `🎉 **LEVEL UP!** ${climber} has leveled up from ${oldLevel.name} to ${newLevel.name}`
+                    : `Current level: **${newLevel.name}**`;
 
-        if (leveledUp) {
+                return `• ${climber}: **${initialTotal} ➜ ${total} 🏔️** • ${levelLine}`;
+            })
+            .join('\n');
 
-            description =
-                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
-                `**${initialTotal} ➜ ${total} 🏔️**\n\n` +
-                `🎉 **LEVEL UP!**\n${climber} has leveled up\n` +
-                `**${oldLevel.name}** ➜ **${newLevel.name}**`;
-
-        } else {
-
-            description =
-                `Updated ${climber} summit stamps by **${amount}**.\n\n` +
-                `**${initialTotal} ➜ ${total} 🏔️**\n\n` +
-                `Current Level: **${newLevel.name}**`;
-
-        }
+        const description =
+            `Updated ${uniqueClimbers.length} climber${uniqueClimbers.length === 1 ? '' : 's'} by **${amount}** summit stamps each.\n\n` +
+            summaryText;
 
 
         // ==========================================
