@@ -327,6 +327,10 @@ client.on(
 // Login
 // ================================
 
+   // Staff quota week rollover + reports (registered before client.login()).
+   const { startStaffScheduler } = require('./staff/scheduler');
+   client.once('ready', () => startStaffScheduler(client));
+
 client.login(
     process.env.TOKEN
 );
