@@ -353,8 +353,8 @@ module.exports = {
         const commandFields = [...categories.entries()].map(([category, commands]) => ({
             name: category,
             value: commands.map(command =>
-                `**${command.name}**\n${command.description}\n*Requires: ${command.requiresLabel}*`
-            ).join('\n\n')
+                `- **${command.name}** • ${command.requiresLabel}`
+            ).join('\n')
         }));
 
         const embed = new EmbedBuilder()
