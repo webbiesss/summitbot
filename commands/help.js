@@ -2,418 +2,375 @@ const {
     SlashCommandBuilder,
     EmbedBuilder
 } = require('discord.js');
+const { getRoleId } = require('../utils/config');
+const staffConfig = require('../staff/config');
 
-// ================================
-// Required Role IDs
-// ================================
+const viewerRoleIds = Array.isArray(staffConfig.roles.viewers)
+    ? staffConfig.roles.viewers.filter(Boolean)
+    : [staffConfig.roles.viewers].filter(Boolean);
 
-// QOTD commands and other general commands
-// require this role or higher
-const QOTD_REQUIRED_ROLE_ID =
-    '1528783752199929896';
+const commandCatalog = [
+    {
+        category: 'QOTD',
+        name: '/qotdadd',
+        description: 'Add a new Question of the Day to the queue.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'QOTD',
+        name: '/qotdlist',
+        description: 'View the next 10 queued Questions of the Day.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'QOTD',
+        name: '/qotdstop',
+        description: 'Pause automatic QOTD posting.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'QOTD',
+        name: '/qotdresume',
+        description: 'Resume automatic QOTD posting.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'QOTD',
+        name: '/qotdnow',
+        description: 'Post the next QOTD immediately.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'QOTD',
+        name: '/qotdremove',
+        description: 'Remove a manually queued QOTD.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/stampupdate',
+        description: 'Update a climber’s summit stamp progress and role tier.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/robloxstamplist',
+        description: 'List tracked Roblox stamp entries.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/robloxstampupdate',
+        description: 'Update a Roblox user’s stamp total.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/robloxstampview',
+        description: 'View a Roblox user’s stamp total and details.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/robloxuseradd',
+        description: 'Add a Roblox user to the tracking system.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/robloxuserremove',
+        description: 'Remove a Roblox user from the tracking system.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Guide & Roblox',
+        name: '/transferrobloxuser',
+        description: 'Transfer a Roblox user and their stamp records.',
+        requires: 'guide',
+        requiresLabel: 'Guide role'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/guidequota',
+        description: 'Record Guide expedition activity and payouts.',
+        requires: 'quotaManager',
+        requiresLabel: 'Quota manager'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/guidequotas',
+        description: 'View the full Guide quota list.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/sarquota',
+        description: 'Record S&R rescue activity and payouts.',
+        requires: 'quotaManager',
+        requiresLabel: 'Quota manager'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/sarquotalist',
+        description: 'View the full S&R quota list.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/staffdepartment',
+        description: 'Enroll or remove a staff member from a department.',
+        requires: 'quotaManager',
+        requiresLabel: 'Quota manager'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/staffquotaadjust',
+        description: 'Manually adjust quota totals with an audit reason.',
+        requires: 'quotaManager',
+        requiresLabel: 'Quota manager'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/staffprofile',
+        description: 'View a staff member’s profile, quota, warnings, and balances.',
+        requires: 'staff',
+        requiresLabel: 'Staff role'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/staffwarnings',
+        description: 'View current Guide or S&R warnings.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/staffwarningedit',
+        description: 'Adjust warning totals for a staff member.',
+        requires: 'quotaManager',
+        requiresLabel: 'Quota manager'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/inactivityadd',
+        description: 'Create a notice excusing staff from quota warnings.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/inactivitylist',
+        description: 'List current and upcoming inactivity notices.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Staff Quota',
+        name: '/inactivityremove',
+        description: 'Cancel an inactivity notice by ID.',
+        requires: 'viewer',
+        requiresLabel: 'Viewer access'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/staffpayouts',
+        description: 'View unpaid Robux balances for all staff.',
+        requires: 'paymentsManager',
+        requiresLabel: 'Payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/staffpaymentedit',
+        description: 'Add to or set a staff member’s Robux balance.',
+        requires: 'paymentsManager',
+        requiresLabel: 'Payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/staffweeklyreport',
+        description: 'Export this week’s quota, warnings, and payouts.',
+        requires: 'paymentsManager',
+        requiresLabel: 'Payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/wipestaffpayments',
+        description: 'Archive and clear all unpaid Robux balances.',
+        requires: 'paymentsManager',
+        requiresLabel: 'Payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/wipeguidequotas',
+        description: 'Archive and clear the Guide weekly quota totals.',
+        requires: 'quotaAndPayments',
+        requiresLabel: 'Quota manager + payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/wipesarquota',
+        description: 'Archive and clear the S&R weekly quota totals.',
+        requires: 'quotaAndPayments',
+        requiresLabel: 'Quota manager + payments manager'
+    },
+    {
+        category: 'Payments & Reports',
+        name: '/wipesarquotas',
+        description: 'Archive and clear the S&R weekly quota totals.',
+        requires: 'quotaAndPayments',
+        requiresLabel: 'Quota manager + payments manager'
+    },
+    {
+        category: 'General',
+        name: '/leaderboard',
+        description: 'View the summit stamp leaderboard.',
+        requires: 'everyone',
+        requiresLabel: 'Everyone'
+    },
+    {
+        category: 'General',
+        name: '/profile',
+        description: 'View your climber profile or another climber’s profile.',
+        requires: 'everyone',
+        requiresLabel: 'Everyone'
+    },
+    {
+        category: 'General',
+        name: '/help',
+        description: 'View a list of commands you can currently use.',
+        requires: 'everyone',
+        requiresLabel: 'Everyone'
+    }
+];
 
-// /stampupdate requires this role or higher
-const STAMPUPDATE_REQUIRED_ROLE_ID =
-    '827956660638318592';
-
-// ================================
-// Command Descriptions
-// ================================
-
-const commandDescriptions = {
-
-    addqotd:
-        'Add a new Question of the Day to the QOTD queue.',
-
-    qotdlist:
-        'View the next 10 Questions of the Day currently in the queue.',
-
-    qotdstop:
-        'Pause automatic Question of the Day posting.',
-
-    qotdresume:
-        'Resume automatic Question of the Day posting.',
-
-    stampupdate:
-        'Update a climber\'s summit stamp total.',
-
-    profile:
-        'View your climber profile or another climber\'s profile,\nincluding level and number of summit stamps',
-
-
-    leaderboard:
-        'View the leaderboard showing climbers ranked by summit stamps.',
-
-    help:
-        'View a list of World Expedition Manager commands that you have permission to use.',
-    robloxstamplist:
-        'List Roblox stamp entries currently stored in the system.',
-
-    robloxstampupdate:
-        'Update a Roblox user\'s stamp total.',
-
-    robloxstampview:
-        'View a Roblox user\'s stamp total and related info.',
-
-    robloxuseradd:
-        'Add a Roblox user to the tracking system.',
-
-    robloxuserremove:
-        'Remove a Roblox user from the tracking system.',
-
-    transferrobloxuser:
-        'Transfer a Roblox user (and their stamps) to another account.'    
-};
-
-// ================================
-// Check Role Hierarchy
-// ================================
-
-// ...existing code...
-
-function hasRequiredRole(
-    member,
-    requiredRoleId
-) {
-
-    // Make sure the member and guild exist
+function hasAnyRequiredRole(member, roleIds) {
     if (!member || !member.guild) {
         return false;
     }
 
-    // Server owner always has access
     if (member.guild.ownerId === member.id) {
         return true;
     }
 
-    // Get the required role from the guild
-    const requiredRole =
-        member.guild.roles?.cache.get(requiredRoleId);
-
-    if (!requiredRole) {
-        console.warn(
-            `Required role ${requiredRoleId} could not be found.`
-        );
-        return false;
-    }
-
-    // If roles info isn't available on the member, deny access
     if (!member.roles || !member.roles.highest) {
         return false;
     }
 
-    // Compare highest role positions
-    return (
-        member.roles.highest.position >=
-        requiredRole.position
-    );
+    const ids = roleIds.filter(Boolean);
+    if (ids.length === 0) {
+        return false;
+    }
+
+    for (const roleId of ids) {
+        const requiredRole = member.guild.roles?.cache.get(roleId);
+        if (!requiredRole) {
+            continue;
+        }
+        if (member.roles.highest.position >= requiredRole.position) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
-// ...existing code...
+function hasAccess(member, requirement) {
+    if (requirement === 'everyone') {
+        return true;
+    }
 
-// ================================
-// Command
-// ================================
+    if (requirement === 'guide') {
+        return hasAnyRequiredRole(member, [getRoleId('guide')]);
+    }
+
+    if (requirement === 'staff') {
+        return hasAnyRequiredRole(member, [getRoleId('staff')]);
+    }
+
+    if (requirement === 'quotaManager') {
+        return hasAnyRequiredRole(member, [staffConfig.roles.quotaManager]);
+    }
+
+    if (requirement === 'paymentsManager') {
+        return hasAnyRequiredRole(member, [staffConfig.roles.paymentsManager]);
+    }
+
+    if (requirement === 'viewer') {
+        return hasAnyRequiredRole(member, viewerRoleIds);
+    }
+
+    if (requirement === 'quotaAndPayments') {
+        return (
+            hasAnyRequiredRole(member, [staffConfig.roles.quotaManager]) &&
+            hasAnyRequiredRole(member, [staffConfig.roles.paymentsManager])
+        );
+    }
+
+    return false;
+}
 
 module.exports = {
-
-    data:
-        new SlashCommandBuilder()
-            .setName('help')
-            .setDescription(
-                'View commands that you have permission to use.'
-            ),
+    data: new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('View commands that you have permission to use.'),
 
     async execute(interaction) {
+        let member = interaction.member;
 
-        // ================================
-        // Get Guild Member
-        // ================================
-
-         let member = interaction.member;
-
-        // interaction.member can be partial for interactions (no roles manager).
-        // Fetch the full GuildMember if needed so role checks work reliably.
         if (interaction.guild && (!member || !member.roles || !member.roles.highest)) {
             try {
                 member = await interaction.guild.members.fetch(interaction.user.id);
             } catch (err) {
                 console.error('Failed to fetch guild member for help command:', err);
-                member = interaction.member; // fall back to whatever we have
+                member = interaction.member;
             }
         }
-        // ================================
-        // Create Command List
-        // ================================
 
-        const availableCommands = [];
+        const availableCommands = commandCatalog.filter(command => hasAccess(member, command.requires));
 
-        // ================================
-        // QOTD Commands
-        // ================================
+        const categories = new Map();
+        for (const command of availableCommands) {
+            if (!categories.has(command.category)) {
+                categories.set(command.category, []);
+            }
+            categories.get(command.category).push(command);
+        }
 
-        if (
-            hasRequiredRole(
-                member,
-                QOTD_REQUIRED_ROLE_ID
+        const commandFields = [...categories.entries()].map(([category, commands]) => ({
+            name: category,
+            value: commands.map(command =>
+                `**${command.name}**\n${command.description}\n*Requires: ${command.requiresLabel}*`
+            ).join('\n\n')
+        }));
+
+        const embed = new EmbedBuilder()
+            .setTitle('World Expeditions Manager Help')
+            .setDescription('Here are the commands you currently have permission to use:')
+            .addFields(
+                commandFields.length > 0
+                    ? commandFields
+                    : {
+                        name: 'Available Commands',
+                        value: 'You currently do not have access to any commands.'
+                    }
             )
-        ) {
+            .setColor(0x2B2D31)
+            .setTimestamp();
 
-            availableCommands.push(
-                {
-                    name:
-                        '/qotdadd',
-
-                    description:
-                        commandDescriptions.addqotd
-                }
-            );
-
-            availableCommands.push(
-                {
-                    name:
-                        '/qotdlist',
-
-                    description:
-                        commandDescriptions.qotdlist
-                }
-            );
-
-            availableCommands.push(
-                {
-                    name:
-                        '/qotdstop',
-
-                    description:
-                        commandDescriptions.qotdstop
-                }
-            );
-
-            availableCommands.push(
-                {
-                    name:
-                        '/qotdresume',
-
-                    description:
-                        commandDescriptions.qotdresume
-                }
-            );
-
-             availableCommands.push(
-                {
-                    name:
-                        '/qotdnow',
-
-                    description:
-                        'Forces the QOTD to be posted.'
-                }
-            );
-
-            availableCommands.push({
-                 name: '/qotdremove',
-                description: 'Remove a manually queued QOTD from the queue.'
-            });
-        }
-
-        // ================================
-        // Stamp Update Command
-        // ================================
-
-        if (
-            hasRequiredRole(
-                member,
-                STAMPUPDATE_REQUIRED_ROLE_ID
-            )
-        ) {
-
-            availableCommands.push(
-                {
-                    name:
-                        '/stampupdate',
-
-                    description:
-                        commandDescriptions.stampupdate
-                }
-            );
-            // Roblox-related commands (require STAMPUPDATE role)
-            availableCommands.push({
-                name: '/robloxstamplist',
-                description: commandDescriptions.robloxstamplist
-            });
-
-            availableCommands.push({
-                name: '/robloxstampupdate',
-                description: commandDescriptions.robloxstampupdate
-            });
-
-            availableCommands.push({
-                name: '/robloxstampview',
-                description: commandDescriptions.robloxstampview
-            });
-
-            availableCommands.push({
-                name: '/robloxuseradd',
-                description: commandDescriptions.robloxuseradd
-            });
-
-            availableCommands.push({
-                name: '/robloxuserremove',
-                description: commandDescriptions.robloxuserremove
-            });
-
-            availableCommands.push({
-                name: '/transferrobloxuser',
-                description: commandDescriptions.transferrobloxuser
-            });
-        }
-
-        // ================================
-        // Leaderboard
-        // ================================
-
-        // Everyone can use leaderboard
-        availableCommands.push(
-            {
-                name:
-                    '/leaderboard',
-
-                description:
-                    commandDescriptions.leaderboard
-            }
-        );
-          availableCommands.push(
-            {
-                name:
-                    '/profile',
-
-                description:
-                    commandDescriptions.profile
-            }
-        );
-
-        // ================================
-        // Help Command
-        // ================================
-
-        // Everyone can use help
-        availableCommands.push(
-            {
-                name:
-                    '/help',
-
-                description:
-                    commandDescriptions.help
-            }
-        );
-
-        // ================================
-        // Build Command List
-        // ================================
-
-        const commandCategories = [
-            {
-                name: 'Roblox Commands',
-                commandNames: [
-                    '/robloxstamplist',
-                    '/robloxstampupdate',
-                    '/robloxstampview',
-                    '/robloxuseradd',
-                    '/robloxuserremove',
-                    '/transferrobloxuser'
-                ]
-            },
-            {
-                name: 'QOTD Commands',
-                commandNames: [
-                    '/qotdadd',
-                    '/qotdlist',
-                    '/qotdstop',
-                    '/qotdresume',
-                    '/qotdnow',
-                    '/qotdremove'
-                ]
-            },
-            {
-                name: 'Guide Commands',
-                commandNames: [
-                    '/stampupdate'
-                ]
-            },
-            {
-                name: 'General Commands',
-                commandNames: [
-                    '/leaderboard',
-                    '/profile',
-                    '/help'
-                ]
-            }
-        ];
-
-        const commandFields = commandCategories
-            .map(category => {
-                const commands = availableCommands.filter(command =>
-                    category.commandNames.includes(command.name)
-                );
-
-                if (commands.length === 0) {
-                    return null;
-                }
-
-                return {
-                    name:
-                        category.name,
-                    value:
-                        commands.map(command =>
-                            `**${command.name}**\n${command.description}`
-                        ).join('\n\n')
-                };
-            })
-            .filter(Boolean);
-
-        // ================================
-        // Create Embed
-        // ================================
-
-        const embed =
-            new EmbedBuilder()
-
-                .setTitle(
-                    'World Expeditions Manager Help'
-                )
-
-                .setDescription(
-                    'Here are the commands you currently have permission to use:'
-                )
-
-                .addFields(
-                    commandFields.length > 0
-                        ? commandFields
-                        : {
-                            name:
-                                'Available Commands',
-                            value:
-                                'You currently do not have access to any commands.'
-                        }
-                )
-
-                .setColor(
-                    0x2B2D31
-                )
-
-                .setTimestamp();
-
-        // ================================
-        // Send Response
-        // ================================
-
-        await interaction.reply(
-            {
-                embeds:
-                    [embed],
-
-                ephemeral:
-                    true
-            }
-        );
+        await interaction.reply({ embeds: [embed], ephemeral: true });
     }
 };
