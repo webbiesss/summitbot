@@ -219,6 +219,14 @@ client.on(
             );
 
         if (!command) {
+            console.error(
+                `Received /${interaction.commandName}, but that command is not loaded.`
+            );
+            await interaction.reply({
+                content:
+                    'This command is not available right now. Please ask an administrator to redeploy commands and restart the bot.',
+                ephemeral: true
+            });
             return;
         }
 
