@@ -1,7 +1,7 @@
 {
     "enabled": true,
     "queuedQuestions": [],
-    "currentQuestionIndex": 0,
+    "currentQuestionIndex": 1,
     "pausedBy": null,
     "pausedAt": null,
     "resumedBy": null,
@@ -97,6 +97,6 @@
         "Which fictional character would be the worst to share an office with?",
         "If you could have one completely useless superpower, what would it be?",
         "What's the weirdest habit you have that no one knows about?"
-    ]
+    ],
+    "lastPostedAt": "2026-11-11T20:44:57.817Z"
 }
-
