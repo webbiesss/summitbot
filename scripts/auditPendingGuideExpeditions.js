@@ -11,7 +11,7 @@
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { parseGuideLog } = require('../staff/staffLogListener');
+const { parseHistoricalGuideLog } = require('../staff/staffLogListener');
 
 const GUIDE_CHANNEL = '795373221322686466';
 const SENIOR_ROLE = '1528783820097196083';
@@ -104,7 +104,7 @@ async function main() {
     for await (const message of messagesIn(channel)) {
       scanned++;
       if (message.author?.bot || !message.guildId) continue;
-      const parsed = parseGuideLog(message.content);
+      const parsed = parseHistoricalGuideLog(message.content);
       if (!parsed) continue;
       recognized++;
       const link = messageUrl(message);

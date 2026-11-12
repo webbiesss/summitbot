@@ -19,8 +19,8 @@ const DEFAULT_CONFIG = Object.freeze({
   guideChannelId: '795373221322686466',
   sarChannelId: '1539274200227909792',
   seniorRoleId: '1528783820097196083',
-  approvalEmojis: ['1546161163304304771','🖊️','✅','👍'], // Change to the ACTUAL verification emoji used by your staff.
-  allowAuthorToApproveOwnLog: true,
+  approvalEmojis: ['1546161163304304771','🖊️','✅','👍', '852920746941612042','653206565146591232'], // Worldian_Tickmark custom emoji ID.
+  allowAuthorToApproveOwnLog: false,
   timezone: 'America/Vancouver',
   guideHostPoints: 1,
   guideCoHostPoints: 0.5,
@@ -93,6 +93,27 @@ function parseGuideLog(content) {
 
   return { guideRaw: guide, coHostsRaw: coHosts, dateTimeRaw, date, time,
     mountain, result, verifiedClimbersRaw: verifiedClimbers, issues };
+}
+
+/**
+ * Historical-only parser. Old logs do not need dates, mountains, attendance or
+ * results to award ALL-TIME Guide/Co-Host counts. No live payouts use this.
+ * Only messages with a Guide/Co-Host field are considered expedition logs.
+ */
+function parseHistoricalGuideLog(content) {
+  const guide = field(content, /^Guide\s*:\s*(.*)$/i);
+  const coHosts = field(content, /^Co[\s-]*Hosts?\s*:\s*(.*)$/i);
+  if (!guide && !coHosts) return null;
+  const issues = [];
+  if (!guide || /^(?:n\/?a|none|-)$/i.test(guide)) issues.push('Missing Guide.');
+  return {
+    guideRaw: guide,
+    coHostsRaw: coHosts,
+    // These fields exist for compatibility with the event ledger, but the
+    // historical parser intentionally NEVER reads them from the message.
+    dateTimeRaw: null, date: null, time: null, mountain: null,
+    result: null, verifiedClimbersRaw: null, issues,
+  };
 }
 
 function localDate(now, timezone) {
@@ -324,13 +345,18 @@ function updateCountersAndPayments(logs, payments, config, now = new Date()) {
   }
 
   for (const expedition of Object.values(logs.guideExpeditions)) {
-    if (expedition.status !== 'approved') continue;
-    if (!expedition.date || !expedition.guideId) continue;
-    const w = weekStart(expedition.date);
-    const m = expedition.date.slice(0, 7);
+    if (expedition.status !== 'approved' || !expedition.guideId) continue;
+    const historical = expedition.paymentEligibility === 'historical' ||
+      expedition.historicalImport === true;
+    // A historical expedition can have NO event date. It still counts toward
+    // all-time hosting/cohosting, but never weekly/monthly quota or payment.
+    if (!historical && !expedition.date) continue;
+    const w = historical ? null : weekStart(expedition.date);
+    const m = historical ? null : expedition.date.slice(0, 7);
     const credit = (id, key, pointsRobux, payoutRole) => {
       const s = person(id);
       s[key].allTime += 1;
+      if (historical) return; // No current-week/month credit or Robux for history.
       if (w === currentWeek) s[key].week += 1;
       if (m === currentMonth) s[key].month += 1;
       s.guideBaseByWeek[w] = (s.guideBaseByWeek[w] || 0) + pointsRobux;
@@ -504,16 +530,18 @@ function startStaffLogListener(client, options = {}) {
     catch (_) { return; }
     if (!isSenior(reviewer, config.seniorRoleId)) return;
 
-    const parsed = parseGuideLog(message.content);
-    if (!parsed) return;
-    const participants = await resolveParticipants(parsed, message, config);
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
     if (logs.guideExpeditions[message.id]?.status === 'approved') return;
+    const eligibility = classificationForMessage(message, logs);
+    const parsed = eligibility === 'historical'
+      ? parseHistoricalGuideLog(message.content) : parseGuideLog(message.content);
+    if (!parsed) return;
+    const participants = await resolveParticipants(parsed, message, config);
     const entry = makePending(message, parsed);
     entry.parseIssues = participants.issues;
     if (participants.issues.length) {
       entry.status = 'needs_review';
-      entry.paymentEligibility = classificationForMessage(message, logs);
+      entry.paymentEligibility = eligibility;
       logs.guideExpeditions[message.id] = entry;
       saveJson('stafflogs.json', logs, config.dataDir);
       console.warn(`[staffLogListener] Log ${message.id} needs review: ${participants.issues.join(' ')}`);
@@ -521,7 +549,7 @@ function startStaffLogListener(client, options = {}) {
     }
 
     const approved = approvedEntry(message, parsed, participants, user.id, config,
-      classificationForMessage(message, logs), 'live_reaction');
+      eligibility, 'live_reaction');
     logs.guideExpeditions[message.id] = approved;
     persistDerived(logs, config);
   }
@@ -541,10 +569,13 @@ function startStaffLogListener(client, options = {}) {
         previous.lastEditedAt = new Date().toISOString();
       } else return;
     } else {
-      const parsed = parseGuideLog(message.content);
+      const eligibility = previous.paymentEligibility || classificationForMessage(message, logs);
+      const parsed = eligibility === 'historical'
+        ? parseHistoricalGuideLog(message.content) : parseGuideLog(message.content);
       if (parsed) {
         const pending = makePending(message, parsed);
-        pending.paymentEligibility = previous.paymentEligibility || classificationForMessage(message, logs);
+        pending.paymentEligibility = eligibility;
+        pending.historicalImport = previous.historicalImport || false;
         logs.guideExpeditions[message.id] = pending;
       }
       else logs.guideExpeditions[message.id] = { ...previous, status: 'unrecognized' };
@@ -670,7 +701,7 @@ async function backfillGuideHistory(client, options = {}) {
     for await (const message of historyMessages(source)) {
       result.scanned++;
       if (message.author?.bot || !message.guildId) continue;
-      const parsed = parseGuideLog(message.content);
+      const parsed = parseHistoricalGuideLog(message.content);
       if (!parsed) continue;
       result.recognized++;
       const existing = logs.guideExpeditions[message.id];
@@ -714,6 +745,7 @@ async function backfillGuideHistory(client, options = {}) {
 module.exports = {
   startStaffLogListener,
   parseGuideLog,
+  parseHistoricalGuideLog,
   parseEventDate,
   weekStart,
   updateCountersAndPayments,

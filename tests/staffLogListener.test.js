@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const {
-  parseGuideLog, parseEventDate, weekStart, startStaffLogListener,
+  parseGuideLog, parseHistoricalGuideLog, parseEventDate, weekStart, startStaffLogListener,
 } = require('../staff/staffLogListener');
 
 const HOST = '100000000000000001';
@@ -79,7 +79,7 @@ test('only authorized verification counts; Guide + Co-Host each credited once', 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-guide-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const client = new EventEmitter();
-  const listener = startStaffLogListener(client, { dataDir: dir });
+  const listener = startStaffLogListener(client, { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const today = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Vancouver', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -132,7 +132,7 @@ test('only authorized verification counts; Guide + Co-Host each credited once', 
 test('unresolved staff names do not create Guide credit; S&R disabled', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-guide-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const broken = makeMessage(guild, '333333333333333333',
     'Guide: @UnmappedRobloxUser\nCo-Host: N/A\n' +
@@ -159,7 +159,7 @@ test('retains warnings, paid balances, S&R fields and other non-listener dues', 
     staff: { [HOST]: { sar: { warnings: 2 }, guide: { warnings: 3 } } }, guideExpeditions: {} }));
   fs.writeFileSync(path.join(dir, 'staffpayments.json'), JSON.stringify({ schemaVersion: 1,
     staff: { [HOST]: { currentWeekDue: 12, robuxPaid: 90 } } }));
-  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const message = makeMessage(guild, '555555555555555555',
     `Guide: <@${HOST}>\nCo-Host: N/A\n` +
@@ -177,7 +177,7 @@ test('retains warnings, paid balances, S&R fields and other non-listener dues', 
 test('future payout settlement cannot be resurrected from approved Guide log', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-guide-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const now = new Date();
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -207,7 +207,7 @@ test('future payout settlement cannot be resurrected from approved Guide log', a
 test('a Guide log in a thread under the configured channel is recognized', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-guide-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const message = makeMessage(guild, '777777777777777777',
     `**Guide:** <@${HOST}>\n**Co-Host:** N/A\n` +
@@ -224,7 +224,7 @@ test('a Guide log in a thread under the configured channel is recognized', async
 test('attendee list is deduplicated, excludes Guide and co-host, preserves evidence', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-attendance-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   const guild = mockGuild();
   const m = makeMessage(guild, '777777777777777777',
     `Guide: <@${HOST}>\nCo-Host: <@${COHOST}>\n` +
@@ -263,11 +263,11 @@ test('historical backfill imports approved logs into counters but never credits 
     messages: { async fetch({ before }) { return before ? new Map() : messages; } } };
   const client = { channels: { async fetch() { return channel; } } };
 
-  const preview = await backfillGuideHistory(client, { dataDir: dir, dryRun: true });
+  const preview = await backfillGuideHistory(client, { dataDir: dir, dryRun: true, approvalEmojis: ['✅'] });
   assert.equal(preview.approved, 1);
   assert.equal(preview.pending, 1);
   assert.equal(fs.existsSync(path.join(dir, 'stafflogs.json')), false);
-  const summary = await backfillGuideHistory(client, { dataDir: dir, dryRun: false });
+  const summary = await backfillGuideHistory(client, { dataDir: dir, dryRun: false, approvalEmojis: ['✅'] });
   assert.equal(summary.approved, 1);
   assert.equal(summary.pending, 1);
   let logs = read(dir, 'stafflogs.json');
@@ -280,12 +280,12 @@ test('historical backfill imports approved logs into counters but never credits 
   assert.equal(payments.staff[COHOST].currentWeekDue, 0);
   assert.equal(payments.staff[HOST].guideListener.baseRobuxAllTime, 0);
 
-  const again = await backfillGuideHistory(client, { dataDir: dir, dryRun: false });
+  const again = await backfillGuideHistory(client, { dataDir: dir, dryRun: false, approvalEmojis: ['✅'] });
   assert.equal(again.alreadyPresent, 2);
   assert.equal(read(dir, 'stafflogs.json').staff[HOST].guide.hosted.allTime, 1);
 
   // A senior reacts to an unapproved historical log AFTER the import.
-  const live = startStaffLogListener(new EventEmitter(), { dataDir: dir });
+  const live = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
   await live.onReactionAdd(reaction(pending), { id: MOD, bot: false });
   logs = read(dir, 'stafflogs.json');
   payments = read(dir, 'staffpayments.json');
@@ -310,7 +310,7 @@ test('historical import repairs an existing pending record without back-paying i
     async fetch({ before }) { return before ? new Map() : new Map([[msg.id, msg]]); },
   } };
   const summary = await backfillGuideHistory({ channels: { async fetch() { return channel; } } },
-    { dataDir: dir, dryRun: false });
+    { dataDir: dir, dryRun: false, approvalEmojis: ['✅'] });
   assert.equal(summary.approved, 1);
   assert.equal(read(dir, 'stafflogs.json').staff[HOST].guide.hosted.allTime, 1);
   assert.equal(read(dir, 'staffpayments.json').staff[HOST].currentWeekDue, 0);
@@ -339,9 +339,100 @@ test('historical import reads active and archived Guide-channel threads', async 
     },
   };
   const result = await backfillGuideHistory({ channels: { async fetch() { return channel; } } },
-    { dataDir: dir, dryRun: false });
+    { dataDir: dir, dryRun: false, approvalEmojis: ['✅'] });
   assert.equal(result.channels, 2);
   assert.equal(result.approved, 1);
   assert.equal(read(dir, 'stafflogs.json').staff[HOST].guide.hosted.allTime, 1);
   assert.equal(read(dir, 'staffpayments.json').staff[HOST].currentWeekDue, 0);
+});
+
+test('historical parser ignores bad dates and absent mountains, but live parser remains strict', () => {
+  const raw = `Guide: <@${HOST}>\nCo-Host: <@${COHOST}>\n` +
+    'Date / Time: sometime last winter\n' +
+    'Expedition Result: Successful\nVerified Climbers: whoever';
+  const historical = parseHistoricalGuideLog(raw);
+  assert.equal(historical.guideRaw, `<@${HOST}>`);
+  assert.equal(historical.coHostsRaw, `<@${COHOST}>`);
+  assert.deepEqual(historical.issues, []);
+  assert.equal(historical.date, null);
+  assert.equal(historical.mountain, null);
+  assert.ok(parseGuideLog(raw).issues.some(e => e.includes('Date / Time')));
+  assert.ok(parseGuideLog(raw).issues.some(e => e.includes('Mountain')));
+  assert.equal(parseHistoricalGuideLog('Random Discord chat with no Guide fields'), null);
+});
+
+test('date-free historical Guide and Co-Host count ALL-TIME only and never generate payout', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-v3-history-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const guild = mockGuild();
+  const { backfillGuideHistory } = require('../staff/staffLogListener');
+  const approved = makeMessage(guild, '272727272727272727',
+    `Guide: <@${HOST}>\nCo-Host: <@${COHOST}>\nDate / Time: ?? weird ??\n`);
+  approved.reactions = { cache: new Map([['✅', { emoji: { name: '✅' }, users: {
+    async fetch() { return new Map([[MOD, { id: MOD, bot: false }]]); },
+  } }]]) };
+  const pending = makeMessage(guild, '282828282828282828',
+    `Guide: <@${HOST}>\nCo-Host: N/A\nNo date or mountain at all`);
+  pending.reactions = { cache: new Map() };
+  const channel = { id: '795373221322686466', messages: {
+    async fetch({ before }) { return before ? new Map() : new Map([[approved.id, approved], [pending.id, pending]]); },
+  } };
+  const client = { channels: { async fetch() { return channel; } } };
+  const opts = { dataDir: dir, approvalEmojis: ['✅'] };
+  const preview = await backfillGuideHistory(client, { ...opts, dryRun: true });
+  assert.equal(preview.approved, 1);
+  assert.equal(preview.pending, 1);
+  assert.equal(fs.existsSync(path.join(dir, 'stafflogs.json')), false);
+  await backfillGuideHistory(client, { ...opts, dryRun: false });
+  let logs = read(dir, 'stafflogs.json');
+  let payments = read(dir, 'staffpayments.json');
+  assert.equal(logs.staff[HOST].guide.hosted.allTime, 1);
+  assert.equal(logs.staff[HOST].guide.hosted.week, 0);
+  assert.equal(logs.staff[HOST].guide.hosted.month, 0);
+  assert.equal(logs.staff[HOST].guide.weeklyPoints, 0);
+  assert.equal(logs.staff[COHOST].guide.coHosted.allTime, 1);
+  assert.equal(logs.staff[COHOST].guide.coHosted.week, 0);
+  assert.equal(logs.staff[COHOST].guide.coHosted.month, 0);
+  assert.equal(logs.guideExpeditions[approved.id].status, 'approved');
+  assert.equal(logs.guideExpeditions[approved.id].date, null);
+  assert.equal(logs.guideExpeditions[approved.id].mountain, null);
+  assert.deepEqual(logs.guideExpeditions[approved.id].basePayments, []);
+  assert.equal(payments.staff[HOST].currentWeekDue, 0);
+  assert.equal(payments.staff[COHOST].currentWeekDue, 0);
+  assert.equal(logs.guideExpeditions[pending.id].status, 'pending');
+
+  // A senior verifies the old pending entry after the initial import.
+  const listener = startStaffLogListener(new EventEmitter(), opts);
+  await listener.onReactionAdd(reaction(pending), { id: MOD, bot: false });
+  logs = read(dir, 'stafflogs.json');
+  payments = read(dir, 'staffpayments.json');
+  assert.equal(logs.guideExpeditions[pending.id].status, 'approved');
+  assert.equal(logs.staff[HOST].guide.hosted.allTime, 2);
+  assert.equal(logs.staff[HOST].guide.hosted.week, 0);
+  assert.equal(payments.staff[HOST].currentWeekDue, 0);
+  assert.equal(logs.guideExpeditions[pending.id].paymentEligibility, 'historical');
+
+  const rerun = await backfillGuideHistory(client, { ...opts, dryRun: false });
+  assert.equal(rerun.alreadyPresent, 2);
+  assert.equal(read(dir, 'stafflogs.json').staff[HOST].guide.hosted.allTime, 2);
+});
+
+test('previously imported approved date-free historical ledger survives statistics refresh', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'summitbot-v3-refresh-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'stafflogs.json'), JSON.stringify({
+    schemaVersion: 1, staff: {}, guideExpeditions: {
+      '383838383838383838': { status: 'approved', guideId: HOST, coHostIds: [COHOST],
+        paymentEligibility: 'historical', historicalImport: true, date: null,
+        basePayments: [] },
+    },
+  }));
+  const listener = startStaffLogListener(new EventEmitter(), { dataDir: dir, approvalEmojis: ['✅'] });
+  listener.refreshStatistics();
+  const logs = read(dir, 'stafflogs.json');
+  const payments = read(dir, 'staffpayments.json');
+  assert.equal(logs.staff[HOST].guide.hosted.allTime, 1);
+  assert.equal(logs.staff[COHOST].guide.coHosted.allTime, 1);
+  assert.equal(logs.staff[HOST].guide.hosted.week, 0);
+  assert.equal(payments.staff[HOST].currentWeekDue, 0);
 });
