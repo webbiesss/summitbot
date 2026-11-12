@@ -1,4 +1,6 @@
 {
   "schemaVersion": 1,
-  "staff": {}
+  "staff": {},
+  "guideExpeditions": {},
+  "guideListener": {}
 }

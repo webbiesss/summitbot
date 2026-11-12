@@ -118,7 +118,7 @@ async function renderStats(interaction, session) {
       },
       { name: 'Department statistics', value: stats, inline: true },
     )
-    .setFooter({ text: 'Page 1 of 2 · Display only · Data from stafflogs.json' });
+    .setFooter({ text: 'Page 1 of 2 · World Expeditions' });
 
   return { embeds: [embed], components: [navRow(session)], allowedMentions: { parse: [] } };
 }
@@ -221,7 +221,7 @@ async function renderNotices(interaction, session) {
       `────────────\n**Payments:**\n` +
       `**Payments due this week:** ${formatRobux(data.payments.currentWeekDue)}\n` +
       `**Robux paid:** ${formatRobux(data.payments.robuxPaid)}`)
-    .setFooter({ text: 'Page 2 of 2 · Data from the three separate staff JSON files' }));
+    .setFooter({ text: 'Page 2 of 2 · World Expeditions' }));
 
   const rows = [navRow(session)];
   rows.push(new ActionRowBuilder().addComponents(
