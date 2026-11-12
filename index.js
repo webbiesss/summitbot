@@ -3,7 +3,8 @@ const path = require('path');
 const {
     Client,
     Collection,
-    GatewayIntentBits
+    GatewayIntentBits,
+    Partials
 } = require('discord.js');
 const cron = require('node-cron');
 
@@ -14,15 +15,32 @@ const {
     startQotdScheduler
 } = require('./features/qotd');
 
+const {
+    startStaffLogListener
+} = require('./staff/staffLogListener');
+
 // ================================
 // Create Discord Client
 // ================================
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.MessageContent
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction
     ]
 });
+
+// Start Guide and S&R log tracking
+startStaffLogListener(client);
+
+console.log('[Staff Listener] Guide and S&R listeners registered.');
 
 
 // Nightly backup of data folder at 3:00 AM server time
