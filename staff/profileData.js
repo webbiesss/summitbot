@@ -3,7 +3,7 @@
 // READ-ONLY. Another module will maintain the quota/payment JSON files.
 const fs = require('node:fs');
 const path = require('node:path');
-const cfg = require('./profileconfig');
+const cfg = require('./profileConfig');
 
 const dataDir = process.env.SUMMITBOT_STAFF_DATA_DIR || path.join(__dirname, '..', 'data');
 

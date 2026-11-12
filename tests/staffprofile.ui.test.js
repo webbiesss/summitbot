@@ -45,9 +45,9 @@ Module._load = function(name, parent, isMain) {
 };
 const command = require('../commands/staffprofile');
 Module._load = oldLoad;
-const cfg = require('../staff/profileconfig');
+const cfg = require('../staff/profileConfig');
 
-function makeGuild(guide = true, senior = false) {
+function makeGuild(guide = true, senior = false, otherTarget = false) {
   const id = '123456789012345678';
   const required = new Map([
     [cfg.staffRoleId, { position: 10 }],
@@ -63,23 +63,30 @@ function makeGuild(guide = true, senior = false) {
       highest: { id: senior ? cfg.seniorRoleId : cfg.staffRoleId, name: 'Guide', position: senior ? 20 : 10 },
     },
   };
+  const targetUser = { id: '234567890123456789', username: 'AnotherStaff',
+    displayAvatarURL: () => 'https://cdn.discordapp.com/target.png' };
+  const target = { user: targetUser, id: targetUser.id, roles: {
+    cache: { has: (x) => [cfg.staffRoleId, cfg.guideRoleId].includes(x) },
+    highest: { id: cfg.staffRoleId, name: 'Guide', position: 10 },
+  } };
   const guild = {
     id: '987987987987987987',
     roles: { cache: { get: (x) => required.get(x) } },
-    members: { fetch: async () => member },
+    members: { fetch: async (id) => id === targetUser.id ? target : member },
   };
   member.guild = guild;
-  return { guild, user: member.user };
+  target.guild = guild;
+  return { guild, user: member.user, targetUser: otherTarget ? targetUser : null };
 }
 
-function fakeInteraction(guide = true) {
-  const { guild, user } = makeGuild(guide);
+function fakeInteraction(guide = true, senior = false, otherTarget = false) {
+  const { guild, user, targetUser } = makeGuild(guide, senior, otherTarget);
   const collector = new EventEmitter();
   collector.stop = () => collector.emit('end');
   let reply;
   return {
     guild, user, collector,
-    options: { getUser: () => null },
+    options: { getUser: () => targetUser },
     inGuild: () => true,
     reply: async (data) => { reply = data; },
     fetchReply: async () => ({ createMessageComponentCollector: () => collector }),
@@ -116,6 +123,91 @@ test('profile page displays only department present, and private buttons', async
   assert.ok(updated?.embeds?.some((e) => e.title?.includes('Inactivity Notices')));
   assert.ok(updated?.embeds?.some((e) => e.description?.includes('Payments due this week')));
   assert.equal(updated.components.length, 2);
+  assert.equal(updated.components[1].components.some((c) => c.label === 'Edit warnings'), false);
+  interaction.collector.stop();
+});
+
+test('senior can edit another staff member warnings using modal and confirmation', async () => {
+  const targetId = '234567890123456789';
+  fs.writeFileSync(path.join(tmp, 'stafflogs.json'), JSON.stringify({
+    schemaVersion: 1,
+    staff: { [targetId]: { guide: { warnings: 2 }, sar: { warnings: 1 } } },
+  }));
+  const interaction = fakeInteraction(true, true, true);
+  await command.execute(interaction);
+  const page2Id = interaction.output.components[0].components[0].customId;
+  let page2;
+  interaction.collector.emit('collect', {
+    user: interaction.user, customId: page2Id,
+    update: async (data) => { page2 = data; },
+  });
+  await flush();
+  const editButton = page2.components[1].components.find((c) => c.label === 'Edit warnings');
+  assert.ok(editButton);
+  assert.equal(page2.components.length, 2);
+  let shownModal, preview, confirmed;
+  const modalSubmission = {
+    user: interaction.user,
+    fields: { getTextInputValue: (id) => ({ guide: '1', sar: '3', reason: 'Manager correction' })[id] },
+    reply: async (data) => { preview = data; },
+    fetchReply: async () => ({
+      awaitMessageComponent: async () => ({
+        user: interaction.user,
+        customId: preview.components[0].components[1].customId,
+        update: async (data) => { confirmed = data; },
+      }),
+    }),
+  };
+  interaction.collector.emit('collect', {
+    user: interaction.user, guild: interaction.guild,
+    customId: editButton.customId,
+    showModal: async (modal) => { shownModal = modal; },
+    awaitModalSubmit: async () => modalSubmission,
+  });
+  await flush();
+  assert.equal(shownModal.title, 'Edit staff warnings');
+  assert.match(preview.embeds[0].description, /2 → \*\*1\*\*/);
+  assert.match(confirmed.content, /saved/);
+  const db = JSON.parse(fs.readFileSync(path.join(tmp, 'stafflogs.json'), 'utf8'));
+  assert.equal(db.staff[targetId].guide.warnings, 1);
+  assert.equal(db.staff[targetId].sar.warnings, 3);
+  assert.equal(db.staff[targetId].warningHistory[0].by, interaction.user.id);
+  assert.ok(interaction.output.embeds.some((e) => e.description?.includes('Recent warning changes')));
+  interaction.collector.stop();
+});
+
+test('senior cancellation does not write warnings', async () => {
+  const targetId = '234567890123456789';
+  const before = fs.readFileSync(path.join(tmp, 'stafflogs.json'), 'utf8');
+  const interaction = fakeInteraction(true, true, true);
+  await command.execute(interaction);
+  let page2;
+  interaction.collector.emit('collect', {
+    user: interaction.user,
+    customId: interaction.output.components[0].components[0].customId,
+    update: async (data) => { page2 = data; },
+  });
+  await flush();
+  const edit = page2.components[1].components.find((b) => b.label === 'Edit warnings');
+  let preview, cancelResult;
+  const modalSubmission = {
+    user: interaction.user,
+    fields: { getTextInputValue: (id) => ({ guide: '0', sar: '0', reason: 'Cancel test' })[id] },
+    reply: async (data) => { preview = data; },
+    fetchReply: async () => ({ awaitMessageComponent: async () => ({
+      user: interaction.user,
+      customId: preview.components[0].components[0].customId,
+      update: async (data) => { cancelResult = data; },
+    }) }),
+  };
+  interaction.collector.emit('collect', {
+    user: interaction.user, guild: interaction.guild, customId: edit.customId,
+    showModal: async () => {},
+    awaitModalSubmit: async () => modalSubmission,
+  });
+  await flush();
+  assert.match(cancelResult.content, /cancelled/);
+  assert.equal(fs.readFileSync(path.join(tmp, 'stafflogs.json'), 'utf8'), before);
   interaction.collector.stop();
 });
 
