@@ -5,7 +5,7 @@
  * -----------------------------------------------
  * Reads Guide logs, credits a log ONCE after an authorized approval reaction,
  * and writes to data/stafflogs.json + data/staffpayments.json.
- * S&R channel is intentionally inactive until its policy is finalized.
+ * Also reads NEW S&R logs; no S&R historical scan is performed.
  *
  * No slash commands, scheduler, messages, or automated announcements.
  * Invoke: startStaffLogListener(client);
@@ -20,7 +20,7 @@ const DEFAULT_CONFIG = Object.freeze({
   sarChannelId: '1539274200227909792',
   seniorRoleId: '1528783820097196083',
   approvalEmojis: ['1546161163304304771','🖊️','✅','👍', '852920746941612042','653206565146591232'], // Worldian_Tickmark custom emoji ID.
-  allowAuthorToApproveOwnLog: true,
+  allowAuthorToApproveOwnLog: false,  // Senior staff cannot approve their own log.
   timezone: 'America/Vancouver',
   guideHostPoints: 1,
   guideCoHostPoints: 0.5,
@@ -222,6 +222,7 @@ function isSenior(member, requiredId) {
 function ensureLogObject(db) {
   db.staff ||= {};
   db.guideExpeditions ||= {};
+  db.sarRescues ||= {};
   return db;
 }
 
@@ -298,6 +299,234 @@ function parseAttendees(parsed, message, config, hostId, coHostIds) {
     eligibleAttendees: attendees.map(([key, name]) => ({ key, name })),
     attendeeCountStatus: 'parsed_unverified',
     attendeeCountNotes: 'Extracted from reported roster; confirm before paying attendee bonuses.' };
+}
+
+
+// ==========================================
+// LIVE S&R LOG SUPPORT (NO HISTORICAL SCRAPE)
+// ==========================================
+
+const SAR_ROBUX = Object.freeze({ heal: 3, guide: 10, supply: 1 });
+const SAR_EMPTY = /^(?:n\/?a|none|no|nil|0|-)$/i;
+
+function sarLine(raw) {
+  return String(raw || '').replace(/\*\*/g, '').trim().replace(/^[-•]\s*/, '');
+}
+
+function sarNames(raw) {
+  const value = sarLine(raw);
+  if (!value || SAR_EMPTY.test(value)) return [];
+  const parts = value.split(/\s*(?:[,;]|\s+&\s+|\s+and\s+)\s*/i)
+    .map((item) => item.trim()).filter(Boolean);
+  // The form's example "Player 3 & 4" means Player 3 and Player 4.
+  // We intentionally expand this shorthand ONLY for the word "Player";
+  // arbitrary Roblox names are never guessed from an isolated digit.
+  const expanded = [];
+  for (const part of parts) {
+    if (/^\d+$/.test(part) && /^Player\s*\d+$/i.test(expanded.at(-1) || '')) {
+      expanded.push(`${expanded.at(-1).replace(/\d+$/, '')}${part}`);
+    } else {
+      expanded.push(part);
+    }
+  }
+  return expanded.filter((part) => !SAR_EMPTY.test(part));
+}
+
+function sarIdentity(name) {
+  // Names used in S&R reports are often Roblox names, not Discord mentions.
+  // Treat spelling case-insensitively, including "Player1" vs "Player 1".
+  return sarLine(name).replace(/^@/, '').replace(/[\s`*_]/g, '').toLowerCase();
+}
+
+function parseSarLog(content) {
+  const lines = String(content || '').split(/\r?\n/).map(sarLine);
+  const get = (pattern) => {
+    for (const line of lines) {
+      const found = line.match(pattern);
+      if (found) return found[1].trim();
+    }
+    return '';
+  };
+  const onDutyRaw = get(/^On[\s-]*Duty\s+S\s*&\s*R\s*:\s*(.*)$/i);
+  const coSarRaw = get(/^Co[\s-]*S\s*&\s*R\s*:\s*(.*)$/i);
+  const activeGuideRaw = get(/^Active\s+Guide\s*:\s*(.*)$/i);
+  const dateTimeRaw = get(/^Date\s*(?:\/|&|and)\s*Time\s*:\s*(.*)$/i);
+  const place = get(/^Place\s+of\s+Operation\s*:\s*(.*)$/i);
+  const attendeeRaw = get(/^Verified\s+Rescued\s+Attendees\s*(?:\(\s*n\s*\))?\s*:\s*(.*)$/i);
+  const deathCountRaw = get(/^Death\s+Counts?\s*(?:\([^)]*\))?\s*:\s*(.*)$/i);
+  const deathsRaw = get(/^Deaths\s*:\s*(.*)$/i);
+  const otherCasualtiesRaw = get(/^Other\s+types\s+of\s+casualties\s+not\s+mentioned\s*(?:\([^)]*\))?\s*:\s*(.*)$/i);
+  const notes = get(/^Special\s+Notes\s*:\s*(.*)$/i);
+
+  const types = {
+    heal: get(/^(?:Hea(?:l)?th[\s-]*Loss\s*\/\s*Injury|Heal)\s*:\s*(.*)$/i),
+    guide: get(/^Lost\s*:\s*(.*)$/i),
+    supply: get(/^Hunger\s*\/\s*Energy\s*\/\s*Thirst\s+loss\s*:\s*(.*)$/i),
+  };
+
+  // Reject unrelated chat messages even if they are posted in the S&R channel.
+  const recognized = lines.some((line) =>
+    /^(?:On[\s-]*Duty\s+S\s*&\s*R|Co[\s-]*S\s*&\s*R|Verified\s+Rescued\s+Attendees\s*\(?n?\)?|Hea(?:l)?th[\s-]*Loss\s*\/\s*Injury|Lost|Hunger\s*\/\s*Energy\s*\/\s*Thirst\s+loss)\s*:/i.test(line));
+  if (!recognized) return null;
+
+  const issues = [];
+  if (!onDutyRaw || SAR_EMPTY.test(onDutyRaw)) issues.push('Missing On-Duty S&R.');
+  const eventDate = parseEventDate(dateTimeRaw);
+  if (!eventDate) issues.push('Missing or invalid Date/Time.');
+  if (!place || SAR_EMPTY.test(place)) issues.push('Missing Place of Operation.');
+
+  const attendeeCount = /^\d+$/.test(attendeeRaw) ? Number(attendeeRaw) : null;
+  if (attendeeCount === null || !Number.isSafeInteger(attendeeCount)) {
+    issues.push('Verified rescued Attendees(n) must be a non-negative integer.');
+  }
+
+  const byType = { heal: [], guide: [], supply: [] };
+  const recipients = new Map();
+  for (const kind of Object.keys(SAR_ROBUX)) {
+    const seenInType = new Set();
+    for (const name of sarNames(types[kind])) {
+      const key = sarIdentity(name);
+      if (!key || seenInType.has(key)) continue;
+      seenInType.add(key);
+      byType[kind].push(name);
+      const existing = recipients.get(key) || {
+        key, name, types: [], highestType: null, robux: 0,
+      };
+      existing.types.push(kind);
+      if (SAR_ROBUX[kind] > existing.robux) {
+        existing.highestType = kind;
+        existing.robux = SAR_ROBUX[kind];
+      }
+      recipients.set(key, existing);
+    }
+  }
+
+  const rescuedPlayers = [...recipients.values()];
+  if (Number.isSafeInteger(attendeeCount) && rescuedPlayers.length !== attendeeCount) {
+    issues.push(`Verified count (${attendeeCount}) differs from unique named recipients (${rescuedPlayers.length}).`);
+  }
+  const timeMatch = dateTimeRaw.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  return {
+    onDutyRaw, coSarRaw, activeGuideRaw, dateTimeRaw, date: eventDate,
+    time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : null,
+    place, attendeeRaw, attendeeCount, deathCountRaw,
+    deathCount: /^\d+$/.test(deathCountRaw) ? Number(deathCountRaw) : null,
+    deathsRaw,
+    otherCasualtiesRaw, notes, byType, recipients: rescuedPlayers,
+    totalRobux: rescuedPlayers.reduce((total, person) => total + person.robux, 0),
+    issues,
+  };
+}
+
+function makeSarEntry(message, parsed) {
+  return {
+    messageId: message.id,
+    guildId: message.guildId,
+    channelId: message.channelId,
+    messageUrl: messageLink(message),
+    postedBy: message.author?.id || null,
+    postedAt: message.createdAt?.toISOString?.() || new Date().toISOString(),
+    contentHash: hashContent(message.content),
+    status: 'pending',
+    date: parsed.date,
+    time: parsed.time,
+    dateTimeRaw: parsed.dateTimeRaw,
+    place: parsed.place,
+    onDutyRaw: parsed.onDutyRaw,
+    coSarRaw: parsed.coSarRaw,
+    activeGuideRaw: parsed.activeGuideRaw,
+    onDutyId: null,
+    coSarIds: [],
+    attendeeCount: parsed.attendeeCount,
+    byType: parsed.byType,
+    recipients: parsed.recipients,
+    totalRobux: parsed.totalRobux,
+    deathCountRaw: parsed.deathCountRaw,
+    deathCount: parsed.deathCount,
+    deathsRaw: parsed.deathsRaw,
+    otherCasualtiesRaw: parsed.otherCasualtiesRaw,
+    notes: parsed.notes,
+    parseIssues: [...parsed.issues],
+    approvedBy: null,
+    approvedAt: null,
+    paymentStatus: 'unpaid',
+    editedAfterApproval: false,
+    deletedAfterApproval: false,
+  };
+}
+
+function updateSarCountersAndPayments(logs, payments, config, now = new Date()) {
+  ensureLogObject(logs);
+  logs.sarRescues ||= {};
+  payments.staff ||= {};
+  const today = localDate(now, config.timezone);
+  const thisWeek = weekStart(today);
+  const thisMonth = today.slice(0, 7);
+  const stats = new Map();
+
+  function get(id) {
+    if (!stats.has(id)) stats.set(id, {
+      rescues: { week: 0, month: 0, allTime: 0 },
+      byType: { heal: 0, guide: 0, supply: 0 },
+      robuxByWeek: {}, unpaidByWeek: {}, allTimeRobux: 0,
+    });
+    return stats.get(id);
+  }
+
+  for (const entry of Object.values(logs.sarRescues)) {
+    if (entry?.status !== 'approved' || !entry.onDutyId || !entry.date) continue;
+    const week = weekStart(entry.date);
+    const month = entry.date.slice(0, 7);
+    // Only the On-Duty S&R is credited. Co-S&R is recorded but NOT paid;
+    // a co-S&R payout/split policy has not been provided.
+    const data = get(entry.onDutyId);
+    const count = entry.recipients?.length || 0;
+    data.rescues.allTime += count;
+    if (week === thisWeek) data.rescues.week += count;
+    if (month === thisMonth) data.rescues.month += count;
+    for (const kind of Object.keys(SAR_ROBUX)) {
+      data.byType[kind] += entry.byType?.[kind]?.length || 0;
+    }
+    const value = Number(entry.totalRobux) || 0;
+    data.allTimeRobux += value;
+    data.robuxByWeek[week] = (data.robuxByWeek[week] || 0) + value;
+    if (entry.paymentStatus === 'unpaid') {
+      data.unpaidByWeek[week] = (data.unpaidByWeek[week] || 0) + value;
+    }
+  }
+
+  const ids = new Set([
+    ...stats.keys(),
+    ...Object.entries(logs.staff).filter(([, data]) => data?.sar?.listenerManaged).map(([id]) => id),
+    ...Object.entries(payments.staff).filter(([, data]) => data?.sarListener).map(([id]) => id),
+  ]);
+  for (const id of ids) {
+    const calculated = get(id);
+    logs.staff[id] ||= {};
+    const sar = logs.staff[id].sar ||= {};
+    sar.rescues = calculated.rescues;
+    sar.byType = calculated.byType;
+    sar.listenerManaged = true;
+    sar.period = { weekStart: thisWeek, month: thisMonth };
+    // Do not invent weekly quota points or overwrite manually recorded warnings.
+    sar.warnings ??= 0;
+
+    payments.staff[id] ||= {};
+    const payment = payments.staff[id];
+    const previous = Number(payment.sarListener?.currentWeekContribution || 0);
+    const current = calculated.unpaidByWeek[thisWeek] || 0;
+    payment.currentWeekDue = Number(
+      ((Number(payment.currentWeekDue) || 0) - previous + current).toFixed(2)
+    );
+    payment.robuxPaid ??= 0;
+    payment.sarListener = {
+      currentWeekContribution: current,
+      baseRobuxAllTime: calculated.allTimeRobux,
+      baseRobuxByWeek: calculated.robuxByWeek,
+      unpaidBaseRobuxByWeek: calculated.unpaidByWeek,
+      period: { weekStart: thisWeek, month: thisMonth },
+    };
+  }
 }
 
 function approvedEntry(message, parsed, participants, approvedBy, config, paymentEligibility, source) {
@@ -423,6 +652,7 @@ function updateCountersAndPayments(logs, payments, config, now = new Date()) {
 function persistDerived(logs, config, now) {
   const payments = loadJson('staffpayments.json', emptyPayments, config.dataDir);
   updateCountersAndPayments(logs, payments, config, now);
+  updateSarCountersAndPayments(logs, payments, config, now);
   // These are two JSON files, not one atomic transaction. An interrupted write
   // can be repaired by calling refreshStatistics / restarting the bot.
   saveJson('stafflogs.json', logs, config.dataDir);
@@ -485,12 +715,27 @@ function startStaffLogListener(client, options = {}) {
   // forward during subsequent restarts. No messages will be sent.
   const initialLogs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
   initializeCutover(initialLogs, new Date(), true);
+  // Permanent S&R cutover. Only messageCreate events seen after this timestamp
+  // are stored. Existing channel history is never fetched or scanned.
+  initialLogs.sarListener ||= {};
+  initialLogs.sarListener.startedAt ||= new Date().toISOString();
   persistDerived(initialLogs, config);
 
 
   async function onMessageCreate(message) {
     if (!message?.guildId || message.author?.bot) return;
-    if (inChannelOrThread(message, config.sarChannelId)) return; // S&R inactive.
+    if (inChannelOrThread(message, config.sarChannelId)) {
+      const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
+      const cutoff = Date.parse(logs.sarListener?.startedAt || '');
+      const created = message.createdTimestamp || message.createdAt?.getTime?.() || 0;
+      if (!created || !Number.isFinite(cutoff) || created < cutoff) return;
+      if (logs.sarRescues[message.id]) return;
+      const parsed = parseSarLog(message.content);
+      if (!parsed) return;
+      logs.sarRescues[message.id] = makeSarEntry(message, parsed);
+      saveJson('stafflogs.json', logs, config.dataDir);
+      return;
+    }
     if (!inChannelOrThread(message, config.guideChannelId)) return;
     const parsed = parseGuideLog(message.content);
     if (!parsed) return;
@@ -514,14 +759,14 @@ function startStaffLogListener(client, options = {}) {
       }
     }
     const candidate = reaction.message;
-    if (!candidate || !inChannelOrThread(candidate, config.guideChannelId)) return;
+    if (!candidate || (!inChannelOrThread(candidate, config.guideChannelId) &&
+      !inChannelOrThread(candidate, config.sarChannelId))) return;
     let message;
     try { message = typeof candidate.fetch === 'function' ? await candidate.fetch() : candidate; }
     catch (err) {
-      console.error('[staffLogListener] Could not fetch Guide log:', err);
+      console.error('[staffLogListener] Could not fetch staff log:', err);
       return;
     }
-    if (!inChannelOrThread(message, config.guideChannelId)) return;
     if (!message.guild || !message.guildId || message.author?.bot) return;
     if (!config.allowAuthorToApproveOwnLog && message.author?.id === user.id) return;
 
@@ -531,6 +776,43 @@ function startStaffLogListener(client, options = {}) {
     if (!isSenior(reviewer, config.seniorRoleId)) return;
 
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
+
+    if (inChannelOrThread(message, config.sarChannelId)) {
+      // An S&R log MUST have been captured via messageCreate after cutover.
+      // This blocks older messages that receive a fresh reaction later.
+      const existing = logs.sarRescues[message.id];
+      if (!existing || ['approved', 'deleted'].includes(existing.status)) return;
+      const parsed = parseSarLog(message.content);
+      if (!parsed) return;
+      const entry = makeSarEntry(message, parsed);
+      const onDuty = await resolveUser(parsed.onDutyRaw, message, config);
+      if (!onDuty.id) entry.parseIssues.push(onDuty.error);
+      else entry.onDutyId = onDuty.id;
+
+      for (const raw of sarNames(parsed.coSarRaw)) {
+        const coSar = await resolveUser(raw, message, config);
+        if (!coSar.id) entry.parseIssues.push(coSar.error);
+        else if (!entry.coSarIds.includes(coSar.id)) entry.coSarIds.push(coSar.id);
+      }
+      if (entry.onDutyId && entry.coSarIds.includes(entry.onDutyId)) {
+        entry.parseIssues.push('On-Duty S&R cannot also be Co-S&R.');
+      }
+      if (entry.parseIssues.length) {
+        entry.status = 'needs_review';
+        logs.sarRescues[message.id] = entry;
+        saveJson('stafflogs.json', logs, config.dataDir);
+        console.warn(`[staffLogListener] S&R ${message.id} needs review: ${entry.parseIssues.join(' ')}`);
+        return;
+      }
+      entry.status = 'approved';
+      entry.approvedBy = user.id;
+      entry.approvedAt = new Date().toISOString();
+      logs.sarRescues[message.id] = entry;
+      persistDerived(logs, config);
+      return;
+    }
+
+    if (!inChannelOrThread(message, config.guideChannelId)) return;
     if (logs.guideExpeditions[message.id]?.status === 'approved') return;
     const eligibility = classificationForMessage(message, logs);
     const parsed = eligibility === 'historical'
@@ -555,6 +837,26 @@ function startStaffLogListener(client, options = {}) {
   }
 
   async function onMessageUpdate(_oldMessage, newMessage) {
+    if (inChannelOrThread(newMessage, config.sarChannelId)) {
+      let message = newMessage;
+      if (message.partial) {
+        try { message = await message.fetch(); } catch (_) { return; }
+      }
+      const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
+      const previous = logs.sarRescues[message.id];
+      if (!previous || previous.status === 'deleted') return;
+      if (previous.status === 'approved') {
+        if (hashContent(message.content) === previous.contentHash) return;
+        previous.editedAfterApproval = true;
+        previous.lastEditedAt = new Date().toISOString();
+      } else {
+        const parsed = parseSarLog(message.content);
+        logs.sarRescues[message.id] = parsed ? makeSarEntry(message, parsed) :
+          { ...previous, status: 'unrecognized', contentHash: hashContent(message.content) };
+      }
+      saveJson('stafflogs.json', logs, config.dataDir);
+      return;
+    }
     if (!inChannelOrThread(newMessage, config.guideChannelId)) return;
     let message = newMessage;
     if (message.partial) {
@@ -584,6 +886,16 @@ function startStaffLogListener(client, options = {}) {
   }
 
   async function onMessageDelete(message) {
+    if (inChannelOrThread(message, config.sarChannelId)) {
+      const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
+      const entry = logs.sarRescues[message.id];
+      if (!entry) return;
+      if (entry.status === 'approved') entry.deletedAfterApproval = true;
+      else entry.status = 'deleted';
+      entry.deletedAt = new Date().toISOString();
+      saveJson('stafflogs.json', logs, config.dataDir);
+      return;
+    }
     if (!inChannelOrThread(message, config.guideChannelId)) return;
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
     const entry = logs.guideExpeditions[message.id];
@@ -751,4 +1063,6 @@ module.exports = {
   updateCountersAndPayments,
   backfillGuideHistory,
   parseAttendees,
+  parseSarLog,
+  updateSarCountersAndPayments,
 };
