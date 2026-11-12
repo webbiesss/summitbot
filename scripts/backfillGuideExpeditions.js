@@ -5,8 +5,9 @@
  *   node scripts/backfillGuideExpeditions.js --dry-run
  *   node scripts/backfillGuideExpeditions.js --apply
  *
- * An authorized verification reaction must exist; pending/unresolved messages
- * are saved for later review without counting or creating payments.
+ * Historical counts use ONLY Guide and Co-Host fields. Dates, mountains,
+ * and attendance are ignored. Approved history increases ALL-TIME counters
+ * only, and NEVER creates payments. Pending/unresolved logs remain uncredited.
  */
 
 require('dotenv').config();

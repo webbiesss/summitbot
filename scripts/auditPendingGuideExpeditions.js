@@ -35,7 +35,7 @@ const HISTORICAL_EMOJIS = [
   '852920746941612042',  // yep
   '653206565146591232',  // yes
 ];
-const ALLOW_AUTHOR_APPROVAL = false; // Match the importer setting.
+const ALLOW_AUTHOR_APPROVAL = true; // Match the importer setting.
 // If the importer has custom nameToUserId mappings, duplicate them here for audit accuracy.
 const NAME_TO_USER_ID = {};
 

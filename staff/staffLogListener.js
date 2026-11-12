@@ -20,7 +20,7 @@ const DEFAULT_CONFIG = Object.freeze({
   sarChannelId: '1539274200227909792',
   seniorRoleId: '1528783820097196083',
   approvalEmojis: ['1546161163304304771','🖊️','✅','👍', '852920746941612042','653206565146591232'], // Worldian_Tickmark custom emoji ID.
-  allowAuthorToApproveOwnLog: false,
+  allowAuthorToApproveOwnLog: true,
   timezone: 'America/Vancouver',
   guideHostPoints: 1,
   guideCoHostPoints: 0.5,
