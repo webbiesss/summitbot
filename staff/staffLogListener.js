@@ -19,7 +19,7 @@ const DEFAULT_CONFIG = Object.freeze({
   guideChannelId: '795373221322686466',
   sarChannelId: '1539274200227909792',
   seniorRoleId: '1528783820097196083',
-  approvalEmojis: ['1546161163304304771','🖊️','✅'], // Change to the ACTUAL verification emoji used by your staff.
+  approvalEmojis: ['1546161163304304771','🖊️','✅','👍'], // Change to the ACTUAL verification emoji used by your staff.
   allowAuthorToApproveOwnLog: true,
   timezone: 'America/Vancouver',
   guideHostPoints: 1,
