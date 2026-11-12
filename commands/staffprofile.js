@@ -1,6 +1,6 @@
 'use strict';
 
-// discord.js v14. This command READS stafflogs/staffpayments and ONLY writes inactivity notices.
+// discord.js v14. Reads quota/payment data; writes inactivity notices and manually edited warnings.
 const crypto = require('node:crypto');
 const {
   SlashCommandBuilder,
@@ -14,17 +14,18 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const cfg = require('../staff/profileconfig');
+const cfg = require('../staff/profileConfig');
 const {
   loadStaffProfileData, formatRobux, roleOrHigher,
   hasDepartmentRole, getLocalToday,
 } = require('../staff/profileData');
 const notices = require('../staff/inactivityStore');
+const warnings = require('../staff/warningStore');
 
 function safeMarkdown(value) {
   return String(value ?? '').replace(/([\\`*_~|>])/g, '\\$1').slice(0, 500);
 }
-// test
+
 function fmtCount(value) {
   return Number(value || 0).toLocaleString('en-CA', { maximumFractionDigits: 2 });
 }
@@ -211,21 +212,36 @@ async function renderNotices(interaction, session) {
   for (const n of futureCards) embeds.push(noticeEmbed(n, list.ordered.indexOf(n), today));
 
   const warningLines = [];
-  if (guide) warningLines.push(`**Guide warnings:** ${fmtCount(data.guide.warnings)}`);
-  if (sar) warningLines.push(`**S&R warnings:** ${fmtCount(data.sar.warnings)}`);
+  if (guide || data.guide.warnings > 0) warningLines.push(`**Guide warnings:** ${fmtCount(data.guide.warnings)}`);
+  if (sar || data.sar.warnings > 0) warningLines.push(`**S&R warnings:** ${fmtCount(data.sar.warnings)}`);
   if (!warningLines.length) warningLines.push('No department roles assigned.');
+
+  const history = warnings.getWarnings(session.targetId).history.slice(-3).reverse();
+  const warningAudit = history.map((entry) => {
+    const detail = (entry.changes || []).map((c) =>
+      `${c.department === 'sar' ? 'S&R' : 'Guide'} ${c.from} → ${c.to}`);
+    const who = /^\d{17,20}$/.test(String(entry.by)) ? `<@${entry.by}>` : 'unknown editor';
+    const date = String(entry.at || '').slice(0, 10);
+    return `*${detail.join(' · ')} — ${who} (${date})${entry.reason ? `: ${safeMarkdown(entry.reason)}` : ''}*`;
+  });
 
   embeds.push(new EmbedBuilder().setColor(cfg.green)
     .setDescription(
       `────────────\n**Warnings:**\n${warningLines.join('\n')}\n` +
+      (warningAudit.length ? `\n**Recent warning changes:**\n${warningAudit.join('\n')}\n` : '') +
       `────────────\n**Payments:**\n` +
       `**Payments due this week:** ${formatRobux(data.payments.currentWeekDue)}\n` +
       `**Robux paid:** ${formatRobux(data.payments.robuxPaid)}`)
     .setFooter({ text: 'Page 2 of 2 · World Expeditions' }));
 
   const rows = [navRow(session)];
-  rows.push(new ActionRowBuilder().addComponents(
-    button(session, 'add', 'Add inactivity notice', ButtonStyle.Success)));
+  const actionButtons = [button(session, 'add', 'Add inactivity notice', ButtonStyle.Success)];
+  // Warning editor is senior-only. Keep it in this row to respect Discord's five-row limit.
+  const viewer = await interaction.guild.members.fetch(session.viewerId);
+  if (roleOrHigher(viewer, cfg.seniorRoleId)) {
+    actionButtons.push(button(session, 'editwarnings', 'Edit warnings', ButtonStyle.Secondary));
+  }
+  rows.push(new ActionRowBuilder().addComponents(...actionButtons));
   // An action row for each visible notice; at most 3 notices + 2 navigation rows.
   for (const n of visible) {
     const removed = Boolean(n.removedAt);
@@ -359,6 +375,123 @@ async function startForm(buttonInteraction, commandInteraction, session, action,
   }
 }
 
+// Senior-staff warning editor. Modal input -> private Confirm/Cancel -> atomic JSON write.
+// The preview never changes stafflogs.json unless Confirm is clicked in time.
+async function startWarningForm(buttonInteraction, commandInteraction, session) {
+  const viewer = await buttonInteraction.guild.members.fetch(session.viewerId);
+  if (!roleOrHigher(viewer, cfg.seniorRoleId)) {
+    await buttonInteraction.reply({ content: 'Only senior staff can edit warnings.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const original = warnings.getWarnings(session.targetId);
+  const modalId = `sp-warnings:${session.id}:${crypto.randomBytes(5).toString('hex')}`;
+  const modal = new ModalBuilder().setCustomId(modalId).setTitle('Edit staff warnings');
+  for (const { id, label, value } of [
+    { id: 'guide', label: 'Guide warning total', value: original.guide },
+    { id: 'sar', label: 'S&R warning total', value: original.sar },
+  ]) {
+    modal.addComponents(new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short)
+        .setRequired(true).setMaxLength(3).setValue(String(value)),
+    ));
+  }
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder().setCustomId('reason').setLabel('Reason (optional)')
+      .setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(300),
+  ));
+  await buttonInteraction.showModal(modal);
+
+  let submission;
+  try {
+    submission = await buttonInteraction.awaitModalSubmit({
+      filter: (m) => m.user.id === session.viewerId && m.customId === modalId,
+      time: Math.max(1, session.expiresAt - Date.now()),
+    });
+  } catch {
+    return; // Closed or timed out: no changes saved.
+  }
+
+  let nextGuide, nextSar, reason;
+  try {
+    nextGuide = warnings.parseCount(submission.fields.getTextInputValue('guide'), 'Guide warnings');
+    nextSar = warnings.parseCount(submission.fields.getTextInputValue('sar'), 'S&R warnings');
+    reason = submission.fields.getTextInputValue('reason').trim();
+    if (reason.length > 300) throw new Error('Reason must be 300 characters or fewer.');
+    if (nextGuide === original.guide && nextSar === original.sar) {
+      throw new Error('Both totals are unchanged.');
+    }
+  } catch (error) {
+    await submission.reply({ content: `Warnings not saved: ${error.message}`,
+      flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const viewerNow = await commandInteraction.guild.members.fetch(session.viewerId);
+  if (Date.now() >= session.expiresAt || !roleOrHigher(viewerNow, cfg.seniorRoleId) ||
+      !(await authorize(commandInteraction, session))) {
+    await submission.reply({ content: 'Session expired or you no longer have permission. Nothing saved.',
+      flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const summary = [
+    `**Guide warnings:** ${original.guide} → **${nextGuide}** ` +
+      `(${nextGuide - original.guide >= 0 ? '+' : ''}${nextGuide - original.guide})`,
+    `**S&R warnings:** ${original.sar} → **${nextSar}** ` +
+      `(${nextSar - original.sar >= 0 ? '+' : ''}${nextSar - original.sar})`,
+    `**Reason:** ${safeMarkdown(reason || 'Not provided')}`,
+    '\nNo changes will be saved until you press Confirm.',
+  ].join('\n');
+  const confirmId = `sp-wc:${session.id}:${crypto.randomBytes(5).toString('hex')}`;
+  const cancelId = `sp-wx:${session.id}:${crypto.randomBytes(5).toString('hex')}`;
+  await submission.reply({
+    embeds: [new EmbedBuilder().setColor(cfg.green)
+      .setTitle('Confirm warning adjustments').setDescription(summary)],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(cancelId).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(confirmId).setLabel('Confirm').setStyle(ButtonStyle.Success),
+    )], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] },
+  });
+
+  try {
+    const previewMessage = await submission.fetchReply();
+    const answer = await previewMessage.awaitMessageComponent({
+      filter: (i) => i.user.id === session.viewerId &&
+        (i.customId === confirmId || i.customId === cancelId),
+      time: Math.max(1, session.expiresAt - Date.now()),
+    });
+    if (answer.customId === cancelId) {
+      await answer.update({ content: 'Warning edit cancelled. No changes saved.',
+        embeds: [], components: [] });
+      return;
+    }
+    const currentViewer = await commandInteraction.guild.members.fetch(session.viewerId);
+    if (Date.now() >= session.expiresAt ||
+        !roleOrHigher(currentViewer, cfg.seniorRoleId) ||
+        !(await authorize(commandInteraction, session))) {
+      await answer.update({ content: 'Session expired or permission revoked. No changes saved.',
+        embeds: [], components: [] });
+      return;
+    }
+    try {
+      warnings.setWarnings({ userId: session.targetId, actorId: session.viewerId,
+        guide: nextGuide, sar: nextSar, reason,
+        expectedRevision: original.revision,
+        expectedGuide: original.guide, expectedSar: original.sar });
+      await answer.update({ content: 'Warning totals saved and change logged.',
+        embeds: [], components: [] });
+      session.page = 2;
+      await commandInteraction.editReply(await render(commandInteraction, session));
+    } catch (error) {
+      await answer.update({ content: `Warnings not saved: ${error.message}`,
+        embeds: [], components: [] });
+    }
+  } catch {
+    await submission.editReply({ content: 'Warning confirmation timed out. No changes saved.',
+      embeds: [], components: [] }).catch(() => {});
+  }
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffprofile')
@@ -428,6 +561,10 @@ module.exports = {
           collector.stop('closed');
           return;
         }
+        if (action === 'editwarnings') {
+          await startWarningForm(buttonInteraction, interaction, session);
+          return;
+        }
         if (action === 'add') {
           await startForm(buttonInteraction, interaction, session, 'add');
           return;
@@ -449,7 +586,7 @@ module.exports = {
         if (action === 'page2') session.page = 2;
         if (action === 'older') session.noticePage -= 1;
         if (action === 'newer') session.noticePage += 1;
-        // Refresh re-reads all three JSON files; no quota/payment changes are made.
+        // Refresh re-reads the staff JSON files without changing quota/payment records.
         await buttonInteraction.update(await render(interaction, session));
       } catch (error) {
         console.error('[staffprofile] Button error:', error);
