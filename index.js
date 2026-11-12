@@ -28,6 +28,7 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.MessageContent
     ],
     partials: [
@@ -38,7 +39,7 @@ const client = new Client({
 });
 
 // Start Guide and S&R log tracking
-startStaffLogListener(client);
+const staffLogListener = startStaffLogListener(client);
 
 console.log('[Staff Listener] Guide and S&R listeners registered.');
 
@@ -354,8 +355,12 @@ client.on(
 // ================================
 
    // Staff quota week rollover + reports (registered before client.login()).
-   const { startStaffScheduler } = require('./staff/scheduler');
-   client.once('ready', () => startStaffScheduler(client));
+  
+
+const { startWeeklyStaffReports } = require('./staff/weeklyStaffReports');
+client.once('ready', () => {
+    startWeeklyStaffReports(client, { listener: staffLogListener });
+});
 
 client.login(
     process.env.TOKEN
