@@ -20,7 +20,7 @@ const DEFAULT_CONFIG = Object.freeze({
   sarChannelId: '1539274200227909792',
   seniorRoleId: '1528783820097196083',
   approvalEmojis: ['1546161163304304771','🖊️','✅','👍', '852920746941612042','653206565146591232'], // Worldian_Tickmark custom emoji ID.
-  allowAuthorToApproveOwnLog: true,  // Senior staff cannot approve their own log.
+  allowAuthorToApproveOwnLog: false,  // Senior staff cannot approve their own log.
   timezone: 'America/Vancouver',
   guideHostPoints: 1,
   guideCoHostPoints: 0.5,
@@ -506,6 +506,9 @@ function updateSarCountersAndPayments(logs, payments, config, now = new Date()) 
     const sar = logs.staff[id].sar ||= {};
     sar.rescues = calculated.rescues;
     sar.byType = calculated.byType;
+    // One S&R quota point per uniquely rescued attendee. This matches
+    // the weekly quota report and the existing 1-rescue weekly target.
+    sar.weeklyPoints = calculated.rescues.week;
     sar.listenerManaged = true;
     sar.period = { weekStart: thisWeek, month: thisMonth };
     // Do not invent weekly quota points or overwrite manually recorded warnings.
@@ -741,7 +744,8 @@ function startStaffLogListener(client, options = {}) {
     if (!parsed) return;
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
     const existing = logs.guideExpeditions[message.id];
-    if (existing?.status === 'approved') return;
+    // A previously processed message is never re-created, including revoked logs.
+    if (existing) return;
     const pending = makePending(message, parsed);
     pending.paymentEligibility = classificationForMessage(message, logs);
     logs.guideExpeditions[message.id] = pending;
@@ -781,7 +785,7 @@ function startStaffLogListener(client, options = {}) {
       // An S&R log MUST have been captured via messageCreate after cutover.
       // This blocks older messages that receive a fresh reaction later.
       const existing = logs.sarRescues[message.id];
-      if (!existing || ['approved', 'deleted'].includes(existing.status)) return;
+      if (!existing || ['approved', 'deleted', 'removed'].includes(existing.status)) return;
       const parsed = parseSarLog(message.content);
       if (!parsed) return;
       const entry = makeSarEntry(message, parsed);
@@ -813,7 +817,7 @@ function startStaffLogListener(client, options = {}) {
     }
 
     if (!inChannelOrThread(message, config.guideChannelId)) return;
-    if (logs.guideExpeditions[message.id]?.status === 'approved') return;
+    if (['approved', 'deleted', 'removed'].includes(logs.guideExpeditions[message.id]?.status)) return;
     const eligibility = classificationForMessage(message, logs);
     const parsed = eligibility === 'historical'
       ? parseHistoricalGuideLog(message.content) : parseGuideLog(message.content);
@@ -844,7 +848,7 @@ function startStaffLogListener(client, options = {}) {
       }
       const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
       const previous = logs.sarRescues[message.id];
-      if (!previous || previous.status === 'deleted') return;
+      if (!previous || ['deleted', 'removed'].includes(previous.status)) return;
       if (previous.status === 'approved') {
         if (hashContent(message.content) === previous.contentHash) return;
         previous.editedAfterApproval = true;
@@ -864,7 +868,7 @@ function startStaffLogListener(client, options = {}) {
     }
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
     const previous = logs.guideExpeditions[message.id];
-    if (!previous) return;
+    if (!previous || previous.status === 'removed') return;
     if (previous.status === 'approved') {
       if (hashContent(message.content) !== previous.contentHash) {
         previous.editedAfterApproval = true;
@@ -889,7 +893,7 @@ function startStaffLogListener(client, options = {}) {
     if (inChannelOrThread(message, config.sarChannelId)) {
       const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
       const entry = logs.sarRescues[message.id];
-      if (!entry) return;
+      if (!entry || entry.status === 'removed') return;
       if (entry.status === 'approved') entry.deletedAfterApproval = true;
       else entry.status = 'deleted';
       entry.deletedAt = new Date().toISOString();
@@ -899,11 +903,36 @@ function startStaffLogListener(client, options = {}) {
     if (!inChannelOrThread(message, config.guideChannelId)) return;
     const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
     const entry = logs.guideExpeditions[message.id];
-    if (!entry) return;
+    if (!entry || entry.status === 'removed') return;
     if (entry.status === 'approved') entry.deletedAfterApproval = true;
     else entry.status = 'deleted';
     entry.deletedAt = new Date().toISOString();
     saveJson('stafflogs.json', logs, config.dataDir);
+  }
+
+  // Senior corrections use this same write queue as message/reaction handlers.
+  // Records are retained as removed for audit; both departments' derived
+  // statistics and unpaid balances are immediately recalculated.
+  async function revokeLog({ department, messageId, actorId, reason }) {
+    if (!['guide', 'sar'].includes(department)) throw Error('Invalid department.');
+    if (!/^\d{17,20}$/.test(String(actorId))) throw Error('Invalid editor ID.');
+    const explanation = String(reason || '').trim();
+    if (!explanation || explanation.length > 300) {
+      throw Error('A removal reason between 1 and 300 characters is required.');
+    }
+    const logs = ensureLogObject(loadJson('stafflogs.json', emptyLogs, config.dataDir));
+    const entries = department === 'guide' ? logs.guideExpeditions : logs.sarRescues;
+    const entry = entries?.[messageId];
+    if (!entry || entry.status !== 'approved') throw Error('Log no longer exists or is not approved.');
+    if (department === 'guide' && entry.paymentEligibility !== 'live') {
+      throw Error('Historical Guide imports cannot be removed through weekly reports.');
+    }
+    entry.status = 'removed';
+    entry.removedAt = new Date().toISOString();
+    entry.removedBy = actorId;
+    entry.removalReason = explanation;
+    persistDerived(logs, config);
+    return { ...entry };
   }
 
   function safe(handler) {
@@ -927,7 +956,7 @@ function startStaffLogListener(client, options = {}) {
   client.on('messageUpdate', safe(handlers.onMessageUpdate));
   client.on('messageDelete', safe(handlers.onMessageDelete));
 
-  return { ...handlers, refreshStatistics, config };
+  return { ...handlers, refreshStatistics, revokeLog: serial(revokeLog), config };
 }
 
 
@@ -1019,7 +1048,7 @@ async function backfillGuideHistory(client, options = {}) {
       const existing = logs.guideExpeditions[message.id];
       if (existing) {
         result.alreadyPresent++;
-        if (['approved', 'deleted'].includes(existing.status)) continue;
+        if (['approved', 'deleted', 'removed'].includes(existing.status)) continue;
       }
       const entry = makePending(message, parsed);
       entry.paymentEligibility = 'historical';
